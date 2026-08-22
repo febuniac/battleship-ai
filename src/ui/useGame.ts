@@ -24,6 +24,8 @@ export interface UseGameOptions {
 
 export interface Game {
   readonly state: GameState;
+  /** Bumped by `reset`: lets the UI tell a fresh game apart from the very first one. */
+  readonly generation: number;
   /** True while the AI holds the turn: the player's input must be locked out. */
   readonly aiThinking: boolean;
   /** Engine verdict for a hypothetical placement, used for the hover preview. */
@@ -53,6 +55,7 @@ export function useGame(options: UseGameOptions = {}): Game {
 
   const [initialSeed] = useState(() => seed ?? freshSeed());
   const [state, setState] = useState<GameState>(() => createInitialState(initialSeed));
+  const [generation, setGeneration] = useState(0);
   // The ref mirrors `state` so dispatch always validates against the newest state and can
   // report the rejection reason synchronously, without a stale render closure.
   const stateRef = useRef(state);
@@ -87,15 +90,20 @@ export function useGame(options: UseGameOptions = {}): Game {
     };
   }, [state, aiDelayMs, commit]);
 
+  // The engine derives the next game's seed from the current generator state, so a seeded
+  // session stays reproducible across restarts; React only re-seeds the AI's own generator.
   const reset = useCallback((): IllegalReason | null => {
-    const nextSeed = freshSeed();
-    rngRef.current = createRng(nextSeed);
-    commit(createInitialState(nextSeed));
+    const result = applyAction(stateRef.current, { type: 'RESET' });
+    if (!result.ok) return result.reason;
+    rngRef.current = createRng(result.state.rng);
+    commit(result.state);
+    setGeneration((current) => current + 1);
     return null;
   }, [commit]);
 
   return {
     state,
+    generation,
     aiThinking: state.phase === 'playing' && state.turn === 'ai',
     checkPlacement: (shipId, origin, orientation) =>
       validatePlacement(stateRef.current.boards.human, shipId, origin, orientation),

@@ -1,1 +1,177 @@
 @import 'tailwindcss';
+
+@theme {
+  --color-sea-950: oklch(0.19 0.03 240);
+  --color-sea-900: oklch(0.24 0.035 240);
+  --color-sea-800: oklch(0.3 0.04 240);
+  --color-sea-700: oklch(0.38 0.045 240);
+  --color-sea-600: oklch(0.48 0.05 240);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-sea-950 text-slate-100 antialiased;
+    font-synthesis-weight: none;
+  }
+
+  /* Every focusable element keeps a high-contrast ring, including on touch platforms. */
+  :focus-visible {
+    outline: 2px solid var(--color-sky-300);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Hatching on sunk cells so the state survives greyscale and colour-blind viewing. */
+  .cell-hatched {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent 0 3px,
+      color-mix(in oklab, white 22%, transparent) 3px 5px
+    );
+  }
+
+  /* Water grid on the boards: readable structure without decorative noise. */
+  .board-surface {
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, white 4%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, white 4%, transparent) 1px, transparent 1px);
+    background-size: calc(100% / 10) calc(100% / 10);
+  }
+}
+
+/*
+ * State-change animations. They exist to make a transition legible (a shot landing, a ship
+ * going down, the turn changing) and are short enough not to gate interaction. No timing here
+ * is known to the engine; components attach these classes when the state they render changes.
+ */
+@keyframes shot-miss {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes shot-hit {
+  0% {
+    transform: scale(0.5);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-amber-300) 80%, transparent);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0.6rem transparent;
+  }
+}
+
+@keyframes shot-sunk {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.18) rotate(-4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes turn-change {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translateY(0.5rem);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@utility animate-shot-miss {
+  animation: shot-miss 240ms ease-out;
+}
+@utility animate-shot-hit {
+  animation: shot-hit 380ms ease-out;
+}
+@utility animate-shot-sunk {
+  animation: shot-sunk 420ms ease-out;
+}
+@utility animate-turn-change {
+  animation: turn-change 220ms ease-out;
+}
+@utility animate-reveal {
+  animation: reveal 260ms ease-out;
+}
+@utility animate-fade-in {
+  animation: fade-in 200ms ease-out;
+}
+@utility animate-thinking-pulse {
+  animation: thinking-pulse 1.1s ease-in-out infinite;
+}
+
+/*
+ * Reduced motion: state changes must still be perceivable, so animations collapse to a plain
+ * fade instead of movement, and the looping "thinking" pulse stops entirely.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-shot-miss,
+  .animate-shot-hit,
+  .animate-shot-sunk,
+  .animate-reveal,
+  .animate-turn-change {
+    animation: fade-in 150ms ease-out !important;
+  }
+}

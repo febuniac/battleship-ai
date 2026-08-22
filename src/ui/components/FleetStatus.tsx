@@ -14,9 +14,12 @@ export function FleetStatus({ label, board, revealAfloat }: FleetStatusProps) {
   const sunkCount = board.ships.filter(isSunk).length;
 
   return (
-    <section aria-label={label} className="flex flex-col gap-1">
-      <h3 className="text-xs font-semibold tracking-wide text-slate-400 uppercase">
-        {label} - {sunkCount}/{FLEET.length} sunk
+    <section aria-label={label} className="flex flex-col gap-1.5">
+      <h3 className="flex items-baseline gap-2 text-xs font-semibold tracking-[0.08em] text-slate-400 uppercase">
+        {label}
+        <span className="text-slate-500 normal-case">
+          {sunkCount}/{FLEET.length} sunk
+        </span>
       </h3>
       <ul className="flex flex-wrap gap-1.5">
         {FLEET.map((spec) => {
@@ -25,15 +28,19 @@ export function FleetStatus({ label, board, revealAfloat }: FleetStatusProps) {
           return (
             <li
               key={spec.id}
-              className={`rounded px-2 py-0.5 text-xs ${
+              className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${
                 sunk
-                  ? 'bg-rose-700/70 text-rose-100 line-through'
+                  ? 'bg-rose-800 text-rose-50'
                   : revealAfloat
-                    ? 'bg-slate-700 text-slate-200'
-                    : 'bg-slate-800 text-slate-400'
+                    ? 'bg-sea-700 text-slate-200'
+                    : 'bg-sea-800 text-slate-400'
               }`}
             >
-              {spec.name} <span aria-hidden>({spec.size})</span>
+              {sunk ? <span aria-hidden>✕</span> : null}
+              <span className={sunk ? 'line-through' : ''}>{spec.name}</span>
+              <span aria-hidden className="text-[0.65rem] opacity-70">
+                {spec.size}
+              </span>
             </li>
           );
         })}

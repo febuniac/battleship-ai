@@ -1,23 +1,39 @@
 import { useState } from 'react';
-import { coordKey, isSunk, shipAt, shotAt } from '../engine/board.ts';
-import type { Coord, IllegalReason } from '../engine/types.ts';
+import { coordKey, isSunk, sameCoord, shipAt, shotAt } from '../engine/board.ts';
+import type { Coord, IllegalReason, LogEntry, Player } from '../engine/types.ts';
+import { battleAnnouncement } from './announcements.ts';
 import { Board } from './components/Board.tsx';
-import type { CellVariant } from './components/Cell.tsx';
+import type { CellAnimation, CellVariant } from './components/Cell.tsx';
 import { FleetStatus } from './components/FleetStatus.tsx';
 import { GameOverOverlay } from './components/GameOverOverlay.tsx';
+import { Legend } from './components/Legend.tsx';
+import { LiveRegion } from './components/LiveRegion.tsx';
 import { StatusLog } from './components/StatusLog.tsx';
 import { TurnBanner } from './components/TurnBanner.tsx';
 import { ValidationHint } from './components/ValidationHint.tsx';
 import { reasonText } from './messages.ts';
 import type { Game } from './useGame.ts';
 
+/** The most recent shot animates once, on whichever board received it. */
+function animationFor(last: LogEntry | undefined, attacker: Player, at: Coord): CellAnimation {
+  if (!last || last.player !== attacker || !sameCoord(last.at, at)) return null;
+  if (last.sunkShipId) return 'sunk';
+  return last.outcome === 'hit' ? 'hit' : 'miss';
+}
+
 export function GameScreen({ game }: { readonly game: Game }) {
   const { state, aiThinking } = game;
-  const [rejected, setRejected] = useState<IllegalReason | null>(null);
+  // Tagged with the log length it happened at, so the notice disappears once a shot lands.
+  const [rejected, setRejected] = useState<{
+    readonly reason: IllegalReason;
+    readonly afterShots: number;
+  } | null>(null);
 
   const enemyBoard = state.boards.ai;
   const ownBoard = state.boards.human;
   const playable = state.phase === 'playing' && !aiThinking;
+  const last = state.log.at(-1);
+  const rejection = rejected?.afterShots === state.log.length ? rejected.reason : null;
 
   // Only cells of ships the engine reports as sunk may be revealed on the enemy board.
   const sunkEnemyCells = new Set(
@@ -41,15 +57,16 @@ export function GameScreen({ game }: { readonly game: Game }) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+      <LiveRegion message={battleAnnouncement(state, aiThinking)} />
+
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-50">Battleship</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-slate-50 sm:text-2xl">
+          Battleship
+        </h1>
         <button
           type="button"
-          onClick={() => {
-            game.reset();
-            setRejected(null);
-          }}
-          className="rounded border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:border-slate-400 hover:bg-slate-800"
+          onClick={() => game.reset()}
+          className="min-h-11 rounded-md border border-sea-600 px-3 text-sm text-slate-200 transition-colors hover:border-slate-400 hover:bg-sea-800"
         >
           New game
         </button>
@@ -57,50 +74,60 @@ export function GameScreen({ game }: { readonly game: Game }) {
 
       <TurnBanner state={state} aiThinking={aiThinking} />
 
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <div className="flex flex-col gap-3 lg:flex-1">
+      <div className="grid gap-6 lg:grid-cols-[1fr_1fr_16rem] lg:gap-8">
+        {/* Attack board first: it is where the player acts. */}
+        <div className="flex flex-col gap-3">
           <Board
             label="Enemy waters"
             caption={playable ? 'Click a cell to fire' : 'Locked while the AI plays'}
             variantAt={enemyVariant}
+            animationAt={(at) => animationFor(last, 'human', at)}
             onSelect={(at) => {
-              setRejected(game.fire(at));
+              const reason = game.fire(at);
+              setRejected(reason === null ? null : { reason, afterShots: state.log.length });
             }}
             cellDisabled={(at) => shotAt(enemyBoard, at) !== 'unknown'}
             disabled={!playable}
+            // Entering the battle (and returning from a finished game) puts focus on the grid.
+            focusKey={game.generation}
           />
           <FleetStatus label="Enemy fleet" board={enemyBoard} revealAfloat={false} />
         </div>
 
-        <div className="flex flex-col gap-3 lg:flex-1">
-          <Board label="Your waters" caption="AI shots land here" variantAt={ownVariant} />
+        <div className="flex flex-col gap-3">
+          <Board
+            label="Your waters"
+            caption="AI shots land here"
+            variantAt={ownVariant}
+            animationAt={(at) => animationFor(last, 'ai', at)}
+          />
           <FleetStatus label="Your fleet" board={ownBoard} revealAfloat />
         </div>
 
-        <aside className="flex flex-col gap-4 lg:w-64">
-          {rejected ? <ValidationHint tone="invalid">{reasonText(rejected)}</ValidationHint> : null}
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+        <aside className="flex flex-col gap-4">
+          {rejection ? (
+            <ValidationHint tone="invalid">{reasonText(rejection)}</ValidationHint>
+          ) : null}
+
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
             <dt className="text-slate-400">Your shots</dt>
-            <dd className="text-slate-100">
+            <dd className="tabular-nums text-slate-100">
               {state.stats.human.shots} ({state.stats.human.hits} hits)
             </dd>
             <dt className="text-slate-400">AI shots</dt>
-            <dd className="text-slate-100">
+            <dd className="tabular-nums text-slate-100">
               {state.stats.ai.shots} ({state.stats.ai.hits} hits)
             </dd>
           </dl>
+
+          <Legend />
           <StatusLog entries={state.log} />
+          <p className="text-xs text-slate-500">Keyboard: arrow keys move, Enter fires.</p>
         </aside>
       </div>
 
       {state.phase === 'gameOver' ? (
-        <GameOverOverlay
-          state={state}
-          onPlayAgain={() => {
-            game.reset();
-            setRejected(null);
-          }}
-        />
+        <GameOverOverlay state={state} onPlayAgain={() => game.reset()} />
       ) : null}
     </div>
   );
