@@ -481,9 +481,14 @@
   .animate-turn-change,
   .animate-ship-place,
   .animate-ship-turn,
-  .animate-ship-sink,
-  .animate-shot-hit > svg {
+  .animate-ship-sink {
     animation: fade-in 150ms ease-out !important;
+  }
+
+  /* A shot mark is read where the cursor already is, so it can simply be there. */
+  .animate-shot-hit > svg {
+    animation: none !important;
+    opacity: 1 !important;
   }
 
   .animate-shot-miss::before,
