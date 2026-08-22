@@ -38,28 +38,29 @@ export function GameOverOverlay({ state, onPlayAgain }: GameOverOverlayProps) {
       role="dialog"
       aria-modal="true"
       aria-label="Game over"
-      className="animate-fade-in fixed inset-0 z-10 flex items-center justify-center bg-sea-950/85 p-4 backdrop-blur-sm"
+      /* The finished boards stay visible through the glass: the result is read against them. */
+      className="animate-fade-in fixed inset-0 z-10 flex items-center justify-center bg-paper/45 p-4 backdrop-blur-[3px]"
     >
-      <div className="animate-reveal flex w-full max-w-sm flex-col gap-5 rounded-lg border border-sea-700 bg-sea-900 p-6 shadow-2xl">
+      <div className="glass animate-reveal flex w-full max-w-sm flex-col gap-6 rounded-3xl p-7">
         <div className="flex flex-col gap-1">
           <p
-            className={`text-xs font-semibold tracking-[0.16em] uppercase ${
-              humanWon ? 'text-emerald-300' : 'text-rose-300'
+            className={`text-[0.7rem] font-medium tracking-[0.2em] uppercase ${
+              humanWon ? 'text-signal' : 'text-impact'
             }`}
           >
             {humanWon ? 'Victory' : 'Defeat'}
           </p>
-          <h2 className="text-2xl font-semibold text-slate-50">
+          <h2 className="text-2xl font-light tracking-tight text-ink">
             {humanWon ? 'You win' : 'The AI wins'}
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-ink-soft">
             {humanWon ? 'Every enemy ship is on the seabed.' : 'Your fleet has been sunk.'}
           </p>
         </div>
 
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-xs tracking-[0.08em] text-slate-500 uppercase">
+            <tr className="text-[0.65rem] tracking-[0.12em] text-ink-faint uppercase">
               <th scope="col" className="text-left font-medium">
                 Final stats
               </th>
@@ -73,12 +74,12 @@ export function GameOverOverlay({ state, onPlayAgain }: GameOverOverlayProps) {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.label} className="border-t border-sea-800">
-                <th scope="row" className="py-1.5 text-left font-normal text-slate-400">
+              <tr key={row.label} className="border-t border-ink/8">
+                <th scope="row" className="py-1.5 text-left font-normal text-ink-soft">
                   {row.label}
                 </th>
-                <td className="py-1.5 text-right tabular-nums text-slate-100">{row.you}</td>
-                <td className="py-1.5 text-right tabular-nums text-slate-100">{row.ai}</td>
+                <td className="py-1.5 text-right text-ink tabular-nums">{row.you}</td>
+                <td className="py-1.5 text-right text-ink tabular-nums">{row.ai}</td>
               </tr>
             ))}
           </tbody>
@@ -88,7 +89,7 @@ export function GameOverOverlay({ state, onPlayAgain }: GameOverOverlayProps) {
           ref={playAgainRef}
           type="button"
           onClick={onPlayAgain}
-          className="min-h-11 rounded-md bg-sky-500 px-4 font-medium text-sea-950 transition-colors hover:bg-sky-400"
+          className="min-h-11 rounded-full bg-ink px-4 text-sm font-medium text-paper transition-colors hover:bg-ink/90"
         >
           Play again
         </button>

@@ -2,14 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { coordKey, coordLabel, findShip, shipAt, shipFootprint } from '../engine/board.ts';
 import { FLEET, shipSpec } from '../engine/rules.ts';
 import type { Coord, Orientation, ShipId } from '../engine/types.ts';
+import { AppHeader } from './components/AppHeader.tsx';
 import { Board } from './components/Board.tsx';
 import type { CellVariant } from './components/Cell.tsx';
 import { LiveRegion } from './components/LiveRegion.tsx';
 import type { ShipVisual } from './components/ShipLayer.tsx';
 import { ShipTray } from './components/ShipTray.tsx';
-import { ValidationHint } from './components/ValidationHint.tsx';
+import { StatusLine } from './components/StatusLine.tsx';
 import { placementReasonText } from './messages.ts';
 import type { Game } from './useGame.ts';
+
+const CONTROL =
+  'glass-button min-h-11 rounded-full px-4 text-xs whitespace-nowrap sm:text-[0.8rem]';
 
 export interface PlacementScreenProps {
   readonly game: Game;
@@ -120,51 +124,42 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
     setSelected(next?.id ?? null);
   };
 
-  const hint = preview
+  const status = preview
     ? {
         tone: preview.reason === null ? ('valid' as const) : ('invalid' as const),
         text: preview.text,
       }
     : fleetComplete
-      ? { tone: 'valid' as const, text: 'Fleet ready — start the game' }
+      ? { tone: 'valid' as const, text: 'Fleet ready' }
       : {
           tone: 'neutral' as const,
           text: activeShip
-            ? `Placing ${shipSpec(activeShip).name} (${orientation}) — press R to rotate`
-            : 'Pick a ship from the fleet list to place it',
+            ? `Placing ${shipSpec(activeShip).name} — press R to rotate`
+            : 'Pick a ship to place it',
         };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-[62rem] flex-col gap-8 sm:gap-10">
       <LiveRegion message={announcement} />
 
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-50 sm:text-2xl">
+      <AppHeader>
+        <h2 className="text-sm font-light tracking-[0.14em] text-ink-soft uppercase">
           Deploy your fleet
-        </h1>
-        <p className="text-sm text-slate-400">
-          Ships may touch but not overlap. All five must be placed.
-        </p>
-      </header>
+        </h2>
+      </AppHeader>
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-10">
-        <div className="flex flex-col gap-3 lg:flex-1">
-          <Board
-            label="Your waters"
-            caption="Click a cell to place the selected ship"
-            side="friendly"
-            variantAt={variantAt}
-            ships={ships}
-            onSelect={onCellSelect}
-            onHover={setHover}
-            {...(autoFocusBoard ? { focusKey: game.generation } : {})}
-          />
-          <p className="text-xs text-slate-500">
-            Keyboard: arrow keys move, Enter places, R rotates.
-          </p>
-        </div>
+      <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-14">
+        <Board
+          label="Your waters"
+          side="friendly"
+          variantAt={variantAt}
+          ships={ships}
+          onSelect={onCellSelect}
+          onHover={setHover}
+          {...(autoFocusBoard ? { focusKey: game.generation } : {})}
+        />
 
-        <div className="flex flex-col gap-4 lg:w-80">
+        <div className="flex flex-col gap-6">
           <ShipTray
             board={board}
             selected={activeShip}
@@ -177,55 +172,50 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
               setSelected(shipId);
               setAnnouncement(`${shipSpec(shipId).name} selected`);
             }}
-            onRemove={(shipId) => {
-              game.remove(shipId);
-              setSelected(shipId);
-              setAnnouncement(`${shipSpec(shipId).name} removed`);
-            }}
           />
 
-          <ValidationHint tone={hint.tone}>{hint.text}</ValidationHint>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={rotate} className={SECONDARY_BUTTON}>
-              Rotate ({orientation === 'horizontal' ? 'H' : 'V'})
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                game.randomize();
-                setSelected(null);
-                setAnnouncement('Fleet placed at random');
-              }}
-              className={SECONDARY_BUTTON}
-            >
-              Randomize fleet
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                game.clearFleet();
-                setSelected(FLEET[0]?.id ?? null);
-                setAnnouncement('Board cleared');
-              }}
-              className={SECONDARY_BUTTON}
-            >
-              Clear
-            </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={rotate} className={CONTROL}>
+                Rotate
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  game.randomize();
+                  setSelected(null);
+                  setAnnouncement('Fleet placed at random');
+                }}
+                className={CONTROL}
+              >
+                Randomize fleet
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  game.clearFleet();
+                  setSelected(FLEET[0]?.id ?? null);
+                  setAnnouncement('Board cleared');
+                }}
+                className={CONTROL}
+              >
+                Clear
+              </button>
+            </div>
             <button
               type="button"
               disabled={!fleetComplete}
               onClick={() => game.start()}
-              className="min-h-11 rounded-md bg-sky-500 px-3 text-sm font-medium text-sea-950 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-sea-700 disabled:text-slate-400"
+              className="min-h-11 rounded-full bg-ink px-4 text-sm font-medium text-paper transition-[background-color,opacity] hover:bg-ink/90 disabled:bg-ink/12 disabled:text-ink-faint"
             >
               Start game
             </button>
           </div>
         </div>
       </div>
+
+      <StatusLine tone={status.tone}>{status.text}</StatusLine>
+      <p className="sr-only">Keyboard: arrow keys move across the grid, Enter places, R rotates.</p>
     </div>
   );
 }
-
-const SECONDARY_BUTTON =
-  'min-h-11 rounded-md border border-sea-600 px-3 text-sm text-slate-200 transition-colors hover:border-slate-400 hover:bg-sea-800';

@@ -36,7 +36,7 @@ export function ShipLayer({ ships }: { readonly ships: readonly ShipVisual[] }) 
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-0 grid grid-cols-10 grid-rows-10 gap-px sm:gap-0.5"
+      className="pointer-events-none absolute inset-0 grid grid-cols-10 grid-rows-10"
     >
       {ships.map((ship) => (
         <div

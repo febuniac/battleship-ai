@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { coordKey, isSunk, sameCoord, shipAt, shotAt } from '../engine/board.ts';
+import { FLEET } from '../engine/rules.ts';
 import type {
   Board as BoardModel,
   Coord,
@@ -7,17 +8,15 @@ import type {
   LogEntry,
   Player,
 } from '../engine/types.ts';
-import { battleAnnouncement } from './announcements.ts';
+import { battleAnnouncement, describeShot } from './announcements.ts';
+import { AppHeader } from './components/AppHeader.tsx';
 import { Board } from './components/Board.tsx';
 import type { CellAnimation, CellVariant } from './components/Cell.tsx';
-import { FleetStatus } from './components/FleetStatus.tsx';
 import { GameOverOverlay } from './components/GameOverOverlay.tsx';
-import { Legend } from './components/Legend.tsx';
 import { LiveRegion } from './components/LiveRegion.tsx';
 import type { ShipVisual } from './components/ShipLayer.tsx';
-import { StatusLog } from './components/StatusLog.tsx';
+import { StatusLine } from './components/StatusLine.tsx';
 import { TurnBanner } from './components/TurnBanner.tsx';
-import { ValidationHint } from './components/ValidationHint.tsx';
 import { reasonText } from './messages.ts';
 import type { Game } from './useGame.ts';
 
@@ -38,6 +37,12 @@ function animationFor(last: LogEntry | undefined, attacker: Player, at: Coord): 
   if (!last || last.player !== attacker || !sameCoord(last.at, at)) return null;
   if (last.sunkShipId) return 'sunk';
   return last.outcome === 'hit' ? 'hit' : 'miss';
+}
+
+/** Shown beside a board only once it means something: no zeroes on an untouched fleet. */
+function sunkCaption(board: BoardModel): string | undefined {
+  const sunk = board.ships.filter(isSunk).length;
+  return sunk === 0 ? undefined : `${sunk} of ${FLEET.length} sunk`;
 }
 
 export function GameScreen({ game }: { readonly game: Game }) {
@@ -74,87 +79,67 @@ export function GameScreen({ game }: { readonly game: Game }) {
     return ship ? 'ship' : 'water';
   };
 
+  const enemyCaption = sunkCaption(enemyBoard);
+  const ownCaption = sunkCaption(ownBoard);
+
+  // One line of commentary: a rejected shot, otherwise whatever just landed.
+  const status = rejection
+    ? { tone: 'invalid' as const, text: reasonText(rejection), key: `reject-${state.log.length}` }
+    : last
+      ? { tone: 'neutral' as const, text: describeShot(last), key: last.seq }
+      : { tone: 'neutral' as const, text: 'Battle stations — pick a target', key: 'start' };
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-[74rem] flex-col gap-8 sm:gap-10">
       <LiveRegion message={battleAnnouncement(state, aiThinking)} />
 
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight text-slate-50 sm:text-2xl">
-          Battleship
-        </h1>
-        <button
-          type="button"
-          onClick={() => game.reset()}
-          className="min-h-11 rounded-md border border-sea-600 px-3 text-sm text-slate-200 transition-colors hover:border-slate-400 hover:bg-sea-800"
-        >
-          New game
-        </button>
-      </header>
+      <AppHeader>
+        <div className="flex items-center gap-4 sm:gap-6">
+          <TurnBanner state={state} aiThinking={aiThinking} />
+          <button
+            type="button"
+            onClick={() => game.reset()}
+            className="glass-button min-h-11 rounded-full px-4 text-sm"
+          >
+            New game
+          </button>
+        </div>
+      </AppHeader>
 
-      <TurnBanner state={state} aiThinking={aiThinking} />
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_1fr_16rem] lg:gap-8">
+      <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
         {/* Attack board first: it is where the player acts. */}
-        <div className="flex flex-col gap-3">
-          <Board
-            label="Enemy waters"
-            caption={
-              state.phase === 'gameOver'
-                ? 'Game over'
-                : playable
-                  ? 'Click a cell to fire'
-                  : 'Locked while the AI plays'
-            }
-            side="enemy"
-            variantAt={enemyVariant}
-            // Only sunk enemy hulls are drawn; an unhit ship is indistinguishable from open water.
-            ships={visibleShips(enemyBoard, 'sunkOnly')}
-            animationAt={(at) => animationFor(last, 'human', at)}
-            onSelect={(at) => {
-              const reason = game.fire(at);
-              setRejected(reason === null ? null : { reason, afterShots: state.log.length });
-            }}
-            cellDisabled={(at) => shotAt(enemyBoard, at) !== 'unknown'}
-            disabled={!playable}
-            // Entering the battle (and returning from a finished game) puts focus on the grid.
-            focusKey={game.generation}
-          />
-          <FleetStatus label="Enemy fleet" board={enemyBoard} revealAfloat={false} />
-        </div>
+        <Board
+          label="Enemy waters"
+          {...(enemyCaption === undefined ? {} : { caption: enemyCaption })}
+          side="enemy"
+          variantAt={enemyVariant}
+          // Only sunk enemy hulls are drawn; an unhit ship is indistinguishable from open water.
+          ships={visibleShips(enemyBoard, 'sunkOnly')}
+          animationAt={(at) => animationFor(last, 'human', at)}
+          onSelect={(at) => {
+            const reason = game.fire(at);
+            setRejected(reason === null ? null : { reason, afterShots: state.log.length });
+          }}
+          cellDisabled={(at) => shotAt(enemyBoard, at) !== 'unknown'}
+          disabled={!playable}
+          // Entering the battle (and returning from a finished game) puts focus on the grid.
+          focusKey={game.generation}
+        />
 
-        <div className="flex flex-col gap-3">
-          <Board
-            label="Your waters"
-            caption="AI shots land here"
-            side="friendly"
-            variantAt={ownVariant}
-            ships={visibleShips(ownBoard, 'all')}
-            animationAt={(at) => animationFor(last, 'ai', at)}
-          />
-          <FleetStatus label="Your fleet" board={ownBoard} revealAfloat />
-        </div>
-
-        <aside className="flex flex-col gap-4">
-          {rejection ? (
-            <ValidationHint tone="invalid">{reasonText(rejection)}</ValidationHint>
-          ) : null}
-
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-            <dt className="text-slate-400">Your shots</dt>
-            <dd className="tabular-nums text-slate-100">
-              {state.stats.human.shots} ({state.stats.human.hits} hits)
-            </dd>
-            <dt className="text-slate-400">AI shots</dt>
-            <dd className="tabular-nums text-slate-100">
-              {state.stats.ai.shots} ({state.stats.ai.hits} hits)
-            </dd>
-          </dl>
-
-          <Legend />
-          <StatusLog entries={state.log} />
-          <p className="text-xs text-slate-500">Keyboard: arrow keys move, Enter fires.</p>
-        </aside>
+        <Board
+          label="Your waters"
+          {...(ownCaption === undefined ? {} : { caption: ownCaption })}
+          side="friendly"
+          variantAt={ownVariant}
+          ships={visibleShips(ownBoard, 'all')}
+          animationAt={(at) => animationFor(last, 'ai', at)}
+        />
       </div>
+
+      <StatusLine tone={status.tone} eventKey={status.key}>
+        {status.text}
+      </StatusLine>
+      <p className="sr-only">Keyboard: arrow keys move across the grid, Enter fires.</p>
 
       {state.phase === 'gameOver' ? (
         <GameOverOverlay state={state} onPlayAgain={() => game.reset()} />

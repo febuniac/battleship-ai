@@ -1,131 +1,254 @@
 @import 'tailwindcss';
 
+/*
+ * A light, quiet palette: paper for the page, pale sea for the playing surface, and navy used
+ * only for type and hairlines. Every board and ship colour derives from these, so the whole
+ * interface can be re-toned from one place.
+ */
 @theme {
-  --color-sea-950: oklch(0.19 0.03 240);
-  --color-sea-900: oklch(0.24 0.035 240);
-  --color-sea-800: oklch(0.3 0.04 240);
-  --color-sea-700: oklch(0.38 0.045 240);
-  --color-sea-600: oklch(0.48 0.05 240);
+  --color-paper: oklch(0.985 0.004 240);
+  --color-paper-sunk: oklch(0.955 0.008 235);
+
+  --color-sea-100: oklch(0.955 0.022 225);
+  --color-sea-200: oklch(0.925 0.036 226);
+  --color-sea-300: oklch(0.885 0.05 228);
+  --color-sea-400: oklch(0.83 0.062 230);
+  --color-sea-500: oklch(0.74 0.075 232);
+
+  --color-ink: oklch(0.29 0.045 250);
+  --color-ink-soft: oklch(0.52 0.03 250);
+  --color-ink-faint: oklch(0.66 0.022 250);
+
+  --color-steel-100: oklch(0.93 0.005 250);
+  --color-steel-300: oklch(0.8 0.008 250);
+  --color-steel-500: oklch(0.66 0.01 250);
+  --color-steel-700: oklch(0.47 0.014 252);
+
+  --color-impact: oklch(0.6 0.16 25);
+  --color-signal: oklch(0.66 0.11 195);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
 }
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   body {
-    @apply bg-sea-950 text-slate-100 antialiased;
+    @apply bg-paper text-ink antialiased;
     font-synthesis-weight: none;
+    /* A single very soft light source from above; nothing on the page needs a heavier surface. */
+    background-image: radial-gradient(
+      120% 80% at 50% -20%,
+      color-mix(in oklab, var(--color-sea-100) 70%, transparent),
+      transparent 60%
+    );
   }
 
-  /* Every focusable element keeps a high-contrast ring, including on touch platforms. */
   :focus-visible {
-    outline: 2px solid var(--color-sky-300);
+    outline: 2px solid var(--color-ink);
     outline-offset: 2px;
   }
 }
 
+/*
+ * Liquid glass, used on the few chrome elements only: header, small controls, overlay. A pane is
+ * a blurred, slightly refracting sheet of the page rather than a coloured card.
+ */
+@utility glass {
+  background-color: color-mix(in oklab, white 62%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid color-mix(in oklab, white 80%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 90%, transparent),
+    0 1px 2px color-mix(in oklab, var(--color-ink) 6%, transparent),
+    0 8px 24px -12px color-mix(in oklab, var(--color-ink) 22%, transparent);
+}
+
 @layer components {
-  /* Hatching on sunk cells so the state survives greyscale and colour-blind viewing. */
+  .glass-button {
+    @apply glass text-ink;
+    transition:
+      background-color 160ms ease,
+      transform 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .glass-button:hover:not(:disabled) {
+    background-color: color-mix(in oklab, white 82%, transparent);
+  }
+
+  .glass-button:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+
+  /*
+   * The ocean. Depth towards the horizon, one restrained specular sheen, and a very low-contrast
+   * swell — all faint enough that the ships and the shot marks stay the loudest things present.
+   */
+  .ocean {
+    background-color: var(--color-sea-200);
+    background-image:
+      linear-gradient(
+        180deg,
+        color-mix(in oklab, white 55%, transparent),
+        transparent 42%,
+        color-mix(in oklab, var(--color-sea-500) 32%, transparent)
+      ),
+      radial-gradient(
+        90% 60% at 22% 8%,
+        color-mix(in oklab, white 45%, transparent),
+        transparent 60%
+      ),
+      repeating-linear-gradient(
+        112deg,
+        color-mix(in oklab, white 22%, transparent) 0 1px,
+        transparent 1px 16px
+      );
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 70%, transparent),
+      inset 0 -14px 28px -18px color-mix(in oklab, var(--color-ink) 40%, transparent),
+      0 24px 48px -28px color-mix(in oklab, var(--color-ink) 40%, transparent);
+  }
+
+  /*
+   * Hairline grid, drawn once behind the cells rather than as 100 cell borders. It lives on a
+   * pseudo-element so the water keeps its own gradients, and sits below the ship layer.
+   */
+  .ocean-grid::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      repeating-linear-gradient(
+        90deg,
+        color-mix(in oklab, var(--color-ink) 11%, transparent) 0 1px,
+        transparent 1px calc(100% / 10)
+      ),
+      repeating-linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--color-ink) 11%, transparent) 0 1px,
+        transparent 1px calc(100% / 10)
+      );
+  }
+
+  /* Hatching keeps sunk cells distinguishable without colour vision. */
   .cell-hatched {
     background-image: repeating-linear-gradient(
       45deg,
       transparent 0 3px,
-      color-mix(in oklab, white 22%, transparent) 3px 5px
-    );
-  }
-
-  /* Steel plating showing through a hit: a puncture in something built, not just a red square. */
-  .cell-plating {
-    background-image: repeating-linear-gradient(
-      90deg,
-      color-mix(in oklab, black 14%, transparent) 0 1.5px,
-      transparent 1.5px 5px
+      color-mix(in oklab, var(--color-ink) 18%, transparent) 3px 4.5px
     );
   }
 
   /*
-   * The playing surface: depth towards the horizon plus a very low-contrast swell. Kept faint on
-   * purpose — the grid, the ships and the shot markers must stay the loudest things on screen.
+   * Ship materials. The silhouettes read these custom properties, so a tone swap turns an intact
+   * vessel into a placement ghost or a wreck without touching any geometry.
    */
-  .ocean-surface {
-    background-color: var(--color-sea-900);
-    background-image:
-      radial-gradient(
-        130% 100% at 50% -10%,
-        color-mix(in oklab, var(--color-sea-700) 55%, transparent),
-        transparent 65%
-      ),
-      repeating-linear-gradient(
-        115deg,
-        color-mix(in oklab, white 2%, transparent) 0 1px,
-        transparent 1px 14px
-      );
-    box-shadow: inset 0 0 1.75rem color-mix(in oklab, black 40%, transparent);
-  }
-
-  /*
-   * Ship palettes. The silhouettes read these custom properties, so one tone swap turns an intact
-   * vessel into a placement ghost or a wreck without touching the geometry.
-   */
-  /* Hulls are drawn as solid objects sitting on the water, with a soft shadow to lift them off it. */
   .ship-sprite .ship-hull {
-    stroke-width: 0.6;
+    stroke-width: 0.5;
     stroke-linejoin: round;
   }
 
-  .ship-sprite .ship-deck {
-    opacity: 0.5;
-  }
-
+  /* Brushed steel: light along the upper edge, graphite at the waterline. */
   .ship-tone-fleet {
-    --ship-hull: oklch(0.52 0.028 235);
-    --ship-deck: oklch(0.72 0.02 235);
-    --ship-detail: oklch(0.26 0.03 240);
-    --ship-line: oklch(0.78 0.02 235);
-    filter: drop-shadow(0 1px 2px color-mix(in oklab, black 55%, transparent));
+    --ship-hull-light: oklch(0.97 0.003 250);
+    --ship-hull: var(--color-steel-300);
+    --ship-hull-dark: var(--color-steel-500);
+    --ship-deck: oklch(0.9 0.005 250);
+    --ship-island: oklch(0.94 0.004 250);
+    --ship-detail: oklch(0.55 0.012 252);
+    --ship-line: color-mix(in oklab, var(--color-ink) 32%, transparent);
+    filter: drop-shadow(0 1px 1.5px color-mix(in oklab, var(--color-ink) 22%, transparent));
   }
 
-  /* A placement that has not happened yet: the same vessel, tinted and slightly transparent. */
+  /* A placement that has not happened yet: the same vessel in glass. */
   .ship-tone-ghost {
-    --ship-hull: color-mix(in oklab, var(--color-emerald-400) 70%, transparent);
-    --ship-deck: var(--color-emerald-100);
-    --ship-detail: color-mix(in oklab, var(--color-emerald-950) 85%, transparent);
-    --ship-line: var(--color-emerald-100);
-    opacity: 0.9;
+    --ship-hull-light: color-mix(in oklab, white 80%, transparent);
+    --ship-hull: color-mix(in oklab, var(--color-steel-300) 45%, transparent);
+    --ship-hull-dark: color-mix(in oklab, var(--color-steel-700) 40%, transparent);
+    --ship-deck: color-mix(in oklab, white 55%, transparent);
+    --ship-island: color-mix(in oklab, white 70%, transparent);
+    --ship-detail: color-mix(in oklab, var(--color-ink) 40%, transparent);
+    --ship-line: color-mix(in oklab, var(--color-ink) 32%, transparent);
+    opacity: 0.85;
   }
 
   .ship-tone-invalid {
-    --ship-hull: color-mix(in oklab, var(--color-rose-500) 70%, transparent);
-    --ship-deck: var(--color-rose-100);
-    --ship-detail: color-mix(in oklab, var(--color-rose-950) 85%, transparent);
-    --ship-line: var(--color-rose-100);
+    --ship-hull-light: color-mix(in oklab, white 70%, transparent);
+    --ship-hull: color-mix(in oklab, var(--color-impact) 34%, transparent);
+    --ship-hull-dark: color-mix(in oklab, var(--color-impact) 55%, transparent);
+    --ship-deck: color-mix(in oklab, white 45%, transparent);
+    --ship-island: color-mix(in oklab, white 60%, transparent);
+    --ship-detail: color-mix(in oklab, var(--color-impact) 70%, transparent);
+    --ship-line: color-mix(in oklab, var(--color-impact) 60%, transparent);
     opacity: 0.9;
   }
 
-  /* Light enough to read as a hull through the dark hatched sunk cells above it. */
+  /* Under the water: a darker, desaturated hull, legible through the hatched sunk cells above. */
   .ship-tone-wreck {
-    --ship-hull: oklch(0.5 0.055 20);
-    --ship-deck: oklch(0.64 0.05 20);
-    --ship-detail: oklch(0.28 0.05 20);
-    --ship-line: oklch(0.82 0.06 20);
-    opacity: 0.9;
-    filter: drop-shadow(0 1px 2px color-mix(in oklab, black 55%, transparent));
+    --ship-hull-light: oklch(0.72 0.02 250);
+    --ship-hull: oklch(0.58 0.02 252);
+    --ship-hull-dark: oklch(0.38 0.02 252);
+    --ship-deck: oklch(0.64 0.015 250);
+    --ship-island: oklch(0.68 0.015 250);
+    --ship-detail: oklch(0.34 0.02 252);
+    --ship-line: color-mix(in oklab, var(--color-ink) 55%, transparent);
+    filter: drop-shadow(0 1px 2px color-mix(in oklab, var(--color-ink) 35%, transparent));
   }
 }
 
 /*
- * State-change animations. They exist to make a transition legible (a shot landing, a ship
- * going down, the turn changing) and are short enough not to gate interaction. No timing here
- * is known to the engine; components attach these classes when the state they render changes.
+ * Motion. Every animation exists to make one state change legible — a shot landing, a hull going
+ * down, the turn passing — and all of them are short enough not to gate interaction. No timing
+ * here is known to the engine; components attach these classes when the state they render changes.
  */
-@keyframes shot-miss {
+
+/* A miss: the round enters the water, throws a crown of spray, then the ripple settles. */
+@keyframes splash-crown {
   0% {
-    transform: scale(0.4);
+    transform: scale(0.2);
     opacity: 0;
   }
-  60% {
-    transform: scale(1.15);
+  18% {
+    transform: scale(0.55);
+    opacity: 1;
+  }
+  55% {
+    transform: scale(1.05);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes splash-ripple {
+  0% {
+    transform: scale(0.25);
+    opacity: 0;
+    border-width: 3px;
+  }
+  25% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+@keyframes impact-flash {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  35% {
+    transform: scale(1.1);
     opacity: 1;
   }
   100% {
@@ -134,17 +257,14 @@
   }
 }
 
-@keyframes shot-hit {
+@keyframes impact-ring {
   0% {
-    transform: scale(0.5);
-    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-amber-300) 80%, transparent);
-  }
-  50% {
-    transform: scale(1.2);
+    transform: scale(0.4);
+    opacity: 0.85;
   }
   100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0.6rem transparent;
+    transform: scale(1.7);
+    opacity: 0;
   }
 }
 
@@ -152,18 +272,18 @@
   0% {
     transform: scale(1);
   }
-  35% {
-    transform: scale(1.18) rotate(-4deg);
+  40% {
+    transform: scale(1.08);
   }
   100% {
-    transform: scale(1) rotate(0deg);
+    transform: scale(1);
   }
 }
 
 @keyframes turn-change {
   0% {
     opacity: 0;
-    transform: translateY(-0.35rem);
+    transform: translateY(-0.2rem);
   }
   100% {
     opacity: 1;
@@ -174,7 +294,7 @@
 @keyframes reveal {
   0% {
     opacity: 0;
-    transform: scale(0.96) translateY(0.5rem);
+    transform: scale(0.97) translateY(0.4rem);
   }
   100% {
     opacity: 1;
@@ -191,23 +311,22 @@
   }
 }
 
-/* A ship arriving on the board: settles into place rather than popping in. */
+/* A ship arriving on the board settles onto the water rather than popping in. */
 @keyframes ship-place {
   0% {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.94) translateY(-0.15rem);
   }
   100% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 
-/* Turning under the cursor during placement. */
 @keyframes ship-turn {
   0% {
-    opacity: 0;
-    transform: scale(0.94);
+    opacity: 0.2;
+    transform: scale(0.96);
   }
   100% {
     opacity: 1;
@@ -215,17 +334,20 @@
   }
 }
 
-/* Going down: takes on a list, then settles as a wreck. */
+/* Going down: takes on a list and darkens as the water closes over it. */
 @keyframes ship-sink {
   0% {
-    transform: rotate(0deg) scale(1);
-    filter: brightness(1.25);
+    opacity: 0;
+    transform: rotate(0deg) scale(1.04);
+    filter: brightness(1.2);
   }
   45% {
-    transform: rotate(-3.5deg) scale(0.98);
+    transform: rotate(-2.5deg) scale(1);
+    opacity: 1;
   }
   100% {
     transform: rotate(0deg) scale(1);
+    opacity: 1;
     filter: brightness(1);
   }
 }
@@ -233,47 +355,85 @@
 @keyframes thinking-pulse {
   0%,
   100% {
-    opacity: 0.45;
+    opacity: 0.35;
   }
   50% {
     opacity: 1;
   }
 }
 
-@utility animate-shot-miss {
-  animation: shot-miss 240ms ease-out;
-}
-@utility animate-shot-hit {
-  animation: shot-hit 380ms ease-out;
-}
 @utility animate-shot-sunk {
-  animation: shot-sunk 420ms ease-out;
+  animation: shot-sunk 460ms ease-out;
 }
 @utility animate-turn-change {
-  animation: turn-change 220ms ease-out;
+  animation: turn-change 240ms ease-out;
 }
 @utility animate-reveal {
-  animation: reveal 260ms ease-out;
+  animation: reveal 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @utility animate-fade-in {
-  animation: fade-in 200ms ease-out;
+  animation: fade-in 220ms ease-out;
 }
 @utility animate-thinking-pulse {
-  animation: thinking-pulse 1.1s ease-in-out infinite;
+  animation: thinking-pulse 1.2s ease-in-out infinite;
 }
 @utility animate-ship-place {
-  animation: ship-place 260ms ease-out;
+  animation: ship-place 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @utility animate-ship-turn {
-  animation: ship-turn 160ms ease-out;
+  animation: ship-turn 180ms ease-out;
 }
 @utility animate-ship-sink {
-  animation: ship-sink 620ms ease-in-out;
+  animation: ship-sink 720ms ease-out;
+}
+
+@layer components {
+  /* Spray and ripple are drawn by the cell's own pseudo-elements, so a miss needs no extra DOM. */
+  .animate-shot-miss::before,
+  .animate-shot-miss::after,
+  .animate-shot-hit::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    border-radius: 9999px;
+    pointer-events: none;
+  }
+
+  .animate-shot-miss::before {
+    width: 62%;
+    height: 62%;
+    background: radial-gradient(
+      circle,
+      color-mix(in oklab, white 92%, transparent) 0 38%,
+      color-mix(in oklab, white 45%, transparent) 55%,
+      transparent 72%
+    );
+    animation: splash-crown 520ms ease-out;
+  }
+
+  .animate-shot-miss::after {
+    width: 88%;
+    height: 88%;
+    border: 2px solid color-mix(in oklab, white 85%, transparent);
+    animation: splash-ripple 720ms 90ms ease-out;
+  }
+
+  .animate-shot-hit::after {
+    width: 84%;
+    height: 84%;
+    border: 2px solid color-mix(in oklab, var(--color-impact) 70%, transparent);
+    animation: impact-ring 520ms ease-out;
+  }
+
+  .animate-shot-hit > svg {
+    animation: impact-flash 380ms ease-out;
+  }
 }
 
 /*
- * Reduced motion: state changes must still be perceivable, so animations collapse to a plain
- * fade instead of movement, and the looping "thinking" pulse stops entirely.
+ * Reduced motion: state changes must stay perceivable, so the spray, ripple and list collapse to
+ * a plain fade, and the looping "thinking" pulse stops entirely.
  */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -285,14 +445,19 @@
     scroll-behavior: auto !important;
   }
 
-  .animate-shot-miss,
-  .animate-shot-hit,
   .animate-shot-sunk,
   .animate-reveal,
   .animate-turn-change,
   .animate-ship-place,
   .animate-ship-turn,
-  .animate-ship-sink {
+  .animate-ship-sink,
+  .animate-shot-hit > svg {
     animation: fade-in 150ms ease-out !important;
+  }
+
+  .animate-shot-miss::before,
+  .animate-shot-miss::after,
+  .animate-shot-hit::after {
+    content: none;
   }
 }

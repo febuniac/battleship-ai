@@ -37,10 +37,13 @@ function moveFocus(from: Coord, key: string): Coord | null {
   }
 }
 
-/** The two boards are framed differently so the target and the home fleet never get confused. */
+/**
+ * The two waters are the same material, separated only by temperature: the enemy's is cooler and
+ * deeper, the player's own is calmer and lighter. No frames, no cards — the board is the object.
+ */
 const SIDE_CLASS = {
-  enemy: 'border-sky-400/25 shadow-[0_0_0_1px_rgba(56,189,248,0.06)]',
-  friendly: 'border-emerald-400/20 shadow-[0_0_0_1px_rgba(52,211,153,0.06)]',
+  enemy: 'ring-1 ring-inset ring-ink/10',
+  friendly: 'ring-1 ring-inset ring-white/70 saturate-[0.82] brightness-[1.03]',
 } as const;
 
 export interface BoardProps {
@@ -69,8 +72,8 @@ export interface BoardProps {
  * A 10x10 grid of cells with a single tab stop (roving `tabindex`), so reaching the board and
  * moving around inside it are separate steps for keyboard users instead of 100 tab presses.
  *
- * Coordinate gutters sit outside the playing surface, which lets the ship layer share the exact
- * grid geometry of the cells.
+ * Coordinate labels sit outside the water, which lets the ship layer share the exact grid
+ * geometry of the cells.
  */
 export function Board({
   label,
@@ -110,66 +113,64 @@ export function Board({
   };
 
   return (
-    <section aria-label={label} className="flex flex-col gap-2">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-        <h2 className="text-sm font-semibold tracking-[0.08em] text-slate-100 uppercase">
+    <section aria-label={label} className="flex flex-col gap-2.5">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-0.5">
+        <h2 className="text-[0.7rem] font-medium tracking-[0.18em] text-ink-soft uppercase">
           {label}
         </h2>
-        {caption ? <p className="text-xs text-slate-400">{caption}</p> : null}
+        {caption ? <p className="text-xs text-ink-faint">{caption}</p> : null}
       </header>
 
-      <div className={`rounded-lg border bg-sea-900/60 p-2 sm:p-2.5 ${SIDE_CLASS[side]}`}>
-        <div className="grid grid-cols-[1.1rem_minmax(0,1fr)] gap-x-1">
-          <div aria-hidden />
-          <div
-            aria-hidden
-            className="grid grid-cols-10 gap-px pb-1 text-center text-[0.6rem] font-medium tracking-wider text-slate-400 sm:gap-0.5"
-          >
-            {COLUMN_LABELS.map((column) => (
-              <div key={column}>{column}</div>
-            ))}
-          </div>
+      <div className="grid grid-cols-[0.9rem_minmax(0,1fr)] items-center gap-x-1.5 sm:gap-x-2">
+        <div aria-hidden />
+        <div
+          aria-hidden
+          className="grid grid-cols-10 pb-1.5 text-center text-[0.6rem] font-medium tracking-[0.1em] text-ink-faint"
+        >
+          {COLUMN_LABELS.map((column) => (
+            <div key={column}>{column}</div>
+          ))}
+        </div>
 
-          <div
-            aria-hidden
-            className="grid grid-rows-10 gap-px pr-1 text-[0.6rem] font-medium tabular-nums text-slate-400 sm:gap-0.5"
-          >
-            {ROWS.map((row) => (
-              <div key={row} className="flex items-center justify-end">
-                {row + 1}
-              </div>
-            ))}
-          </div>
-
-          {/*
-           * Plain grid of buttons rather than ARIA `grid` semantics: each cell already announces
-           * its coordinate and state, and native buttons keep Enter/Space working everywhere.
-           * The ship layer is decorative and sits underneath, showing through the cell gaps and
-           * the translucent ship / preview cells so a fleet reads as one object.
-           */}
-          <div
-            ref={gridRef}
-            onKeyDown={onKeyDown}
-            className="ocean-surface relative rounded-sm ring-1 ring-inset ring-white/5"
-          >
-            <ShipLayer ships={afloat} />
-            <div className="relative grid grid-cols-10 gap-px sm:gap-0.5">
-              {CELLS.map((at) => (
-                <Cell
-                  key={coordLabel(at)}
-                  at={at}
-                  variant={variantAt(at)}
-                  animation={animationAt?.(at) ?? null}
-                  disabled={disabled || cellDisabled?.(at) === true}
-                  tabIndex={at.r === cursor.r && at.c === cursor.c ? 0 : -1}
-                  onFocusCell={setCursor}
-                  {...(onSelect ? { onSelect } : {})}
-                  {...(onHover ? { onHover } : {})}
-                />
-              ))}
+        <div
+          aria-hidden
+          className="grid grid-rows-10 self-stretch pr-0.5 text-[0.6rem] font-medium text-ink-faint tabular-nums"
+        >
+          {ROWS.map((row) => (
+            <div key={row} className="flex items-center justify-end">
+              {row + 1}
             </div>
-            <ShipLayer ships={wrecks} />
+          ))}
+        </div>
+
+        {/*
+         * Plain grid of buttons rather than ARIA `grid` semantics: each cell already announces
+         * its coordinate and state, and native buttons keep Enter/Space working everywhere.
+         * The hairline grid is painted by the water itself, so the cells add no borders of their
+         * own and a hull can span them without interruption.
+         */}
+        <div
+          ref={gridRef}
+          onKeyDown={onKeyDown}
+          className={`ocean ocean-grid relative overflow-hidden rounded-xl sm:rounded-2xl ${SIDE_CLASS[side]}`}
+        >
+          <ShipLayer ships={afloat} />
+          <div className="relative grid grid-cols-10">
+            {CELLS.map((at) => (
+              <Cell
+                key={coordLabel(at)}
+                at={at}
+                variant={variantAt(at)}
+                animation={animationAt?.(at) ?? null}
+                disabled={disabled || cellDisabled?.(at) === true}
+                tabIndex={at.r === cursor.r && at.c === cursor.c ? 0 : -1}
+                onFocusCell={setCursor}
+                {...(onSelect ? { onSelect } : {})}
+                {...(onHover ? { onHover } : {})}
+              />
+            ))}
           </div>
+          <ShipLayer ships={wrecks} />
         </div>
       </div>
     </section>

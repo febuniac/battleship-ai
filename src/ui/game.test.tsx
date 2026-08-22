@@ -11,7 +11,7 @@ const SEED = 20240617;
 // tests is stepped explicitly by `aiTick`.
 const AI_DELAY = 50_000;
 
-const YOUR_TURN = 'Your turn — fire at the enemy waters';
+const YOUR_TURN = 'Your turn';
 const AI_TURN = 'AI is thinking';
 
 /** The AI fleet for `SEED` is known up front, so hits and misses can be chosen deliberately. */
@@ -42,8 +42,17 @@ function banner(): string {
   return screen.getByTestId('turn-banner').textContent ?? '';
 }
 
-function hint(): string {
-  return screen.getByTestId('validation-hint').textContent ?? '';
+/** The single contextual line: what just happened, or why a placement will not work. */
+function status(): string {
+  return screen.getByTestId('status-line').textContent ?? '';
+}
+
+/** Ships shown as placed in the tray, which no longer carries a textual badge. */
+function placedShips(): string[] {
+  const tray = screen.getByRole('list', { name: 'Fleet' });
+  return [...tray.querySelectorAll<HTMLElement>('[data-placed="true"]')].map(
+    (row) => row.dataset.shipRow ?? '',
+  );
 }
 
 function announcement(): string {
@@ -54,12 +63,12 @@ function isLocked(cell: HTMLElement): boolean {
   return cell.getAttribute('aria-disabled') === 'true';
 }
 
-function aiLogEntries(): string[] {
-  const log = screen.getByRole('region', { name: 'Shot log' });
-  return within(log)
-    .queryAllByRole('listitem')
-    .map((item) => item.textContent ?? '')
-    .filter((text) => text.startsWith('AI '));
+/** Shots the AI has resolved, counted off the player's own water rather than a log panel. */
+function aiShotCount(): number {
+  const board = screen.getByRole('region', { name: 'Your waters' });
+  return [...board.querySelectorAll<HTMLElement>('[data-state]')].filter((cell) =>
+    ['miss', 'hit', 'sunk'].includes(cell.dataset.state ?? ''),
+  ).length;
 }
 
 /** Let exactly one paced AI shot resolve. */
@@ -93,19 +102,19 @@ describe('Battleship app', () => {
       expect(screen.getByRole('heading', { name: 'Deploy your fleet' })).toBeDefined();
       const tray = screen.getByRole('list', { name: 'Fleet' });
       expect(within(tray).getAllByRole('listitem')).toHaveLength(5);
-      expect(within(tray).queryAllByText('Placed')).toHaveLength(0);
+      expect(placedShips()).toHaveLength(0);
     });
 
     it('reports the engine reason when a placement would leave the board', async () => {
       await user.hover(ownCell({ r: 0, c: 7 }));
-      expect(hint()).toContain('Ship would extend off the board');
-      expect(screen.getByTestId('validation-hint').dataset.tone).toBe('invalid');
+      expect(status()).toContain('Ship would extend off the board');
+      expect(screen.getByTestId('status-line').dataset.tone).toBe('invalid');
     });
 
     it('names the blocking ship when a placement would overlap', async () => {
       await user.click(ownCell({ r: 0, c: 0 }));
       await user.hover(ownCell({ r: 0, c: 2 }));
-      expect(hint()).toContain('Overlaps Carrier');
+      expect(status()).toContain('Overlaps Carrier');
     });
 
     it('keeps Start game disabled until all five ships are placed', async () => {
@@ -121,20 +130,17 @@ describe('Battleship app', () => {
 
     it('removes a placed ship when its cell is clicked again', async () => {
       await user.click(ownCell({ r: 0, c: 0 }));
-      expect(
-        within(screen.getByRole('list', { name: 'Fleet' })).getAllByText('Placed'),
-      ).toHaveLength(1);
+      expect(placedShips()).toEqual(['carrier']);
 
       await user.click(ownCell({ r: 0, c: 0 }));
-      expect(
-        within(screen.getByRole('list', { name: 'Fleet' })).queryAllByText('Placed'),
-      ).toHaveLength(0);
+      expect(placedShips()).toHaveLength(0);
     });
 
     it('rotates with the R shortcut', async () => {
-      expect(screen.getByRole('button', { name: /^Rotate/ }).textContent).toBe('Rotate (H)');
       await user.keyboard('r');
-      expect(screen.getByRole('button', { name: /^Rotate/ }).textContent).toBe('Rotate (V)');
+      expect(announcement()).toBe('Orientation vertical');
+      await user.keyboard('r');
+      expect(announcement()).toBe('Orientation horizontal');
     });
 
     it('places a ship with the keyboard and announces it', async () => {
@@ -155,9 +161,7 @@ describe('Battleship app', () => {
       expect(announcement()).toBe('Ship would extend off the board');
       // Nothing was placed, and the cell still shows the rejected footprint under the cursor.
       expect(ownCell({ r: 0, c: 8 }).getAttribute('aria-label')).toBe('I1, invalid placement');
-      expect(
-        within(screen.getByRole('list', { name: 'Fleet' })).queryAllByText('Placed'),
-      ).toHaveLength(0);
+      expect(placedShips()).toHaveLength(0);
     });
 
     it('starts the game once the fleet is valid', async () => {
@@ -251,7 +255,7 @@ describe('Battleship app', () => {
     it('hands the turn to the AI after a miss and returns it after an AI miss', async () => {
       await user.click(enemyCell(aiWaterCells[0] as Coord));
       expect(banner()).toContain(AI_TURN);
-      expect(aiLogEntries()).toHaveLength(0);
+      expect(aiShotCount()).toBe(0);
 
       let aiShots = 0;
       let sawStreakAfterHit = false;
@@ -266,12 +270,13 @@ describe('Battleship app', () => {
         }
 
         await aiTick();
-        const entries = aiLogEntries();
         // Exactly one shot per tick, so a streak is visible rather than instantaneous.
-        expect(entries).toHaveLength(aiShots + 1);
-        aiShots = entries.length;
+        expect(aiShotCount()).toBe(aiShots + 1);
+        aiShots = aiShotCount();
 
-        const latest = entries[0] ?? '';
+        // The contextual line is the only running commentary now that the log panel is gone.
+        const latest = status();
+        expect(latest).toMatch(/^AI /);
         const hit = /hit|sank/.test(latest);
         if (previousWasHit) sawStreakAfterHit = true;
         if (hit) {
@@ -313,9 +318,7 @@ describe('Battleship app', () => {
 
       expect(screen.getByRole('heading', { name: 'Deploy your fleet' })).toBeDefined();
       expect(screen.queryByRole('dialog')).toBeNull();
-      expect(
-        within(screen.getByRole('list', { name: 'Fleet' })).queryAllByText('Placed'),
-      ).toHaveLength(0);
+      expect(placedShips()).toHaveLength(0);
       expect(screen.getByRole('button', { name: 'Start game' })).toHaveProperty('disabled', true);
     });
   });

@@ -8,24 +8,23 @@ export type CellVariant =
 export type CellAnimation = 'miss' | 'hit' | 'sunk' | null;
 
 /*
- * Cells that sit over a ship silhouette are deliberately translucent so the drawing below stays
- * readable; resolved states (miss / hit / sunk) stay opaque enough to dominate it.
+ * Open water and the player's own ships add nothing: the ocean material and the ship drawn
+ * underneath are what should be seen. Only resolved states paint the cell, and they stay
+ * translucent enough for a hull to read through them.
  */
 const VARIANT_CLASS: Readonly<Record<CellVariant, string>> = {
-  water: 'bg-sea-800/55 border-sea-700/50 text-sea-600',
-  // Nothing of its own: the ship drawn underneath is what the player should see.
-  ship: 'border-transparent text-slate-700',
-  previewValid: 'bg-emerald-400/12 border-emerald-300/50 text-emerald-100',
-  previewInvalid: 'bg-rose-500/18 border-rose-300/60 text-rose-50',
-  miss: 'bg-sea-700/85 border-sea-600 text-slate-200',
-  hit: 'cell-plating bg-amber-400/70 border-amber-200 text-amber-950',
-  // Translucent so the wreck drawn underneath stays visible through the hatching.
-  sunk: 'cell-hatched bg-rose-800/45 border-rose-400 text-rose-50',
+  water: 'text-transparent',
+  ship: 'text-transparent',
+  previewValid: 'bg-white/35 text-ink/70 ring-1 ring-inset ring-white/80',
+  previewInvalid: 'bg-impact/15 text-impact ring-1 ring-inset ring-impact/45',
+  miss: 'bg-white/45 text-ink-soft',
+  hit: 'bg-impact/22 text-impact ring-1 ring-inset ring-impact/35',
+  sunk: 'cell-hatched bg-paper-sunk/55 text-ink/70',
 };
 
 /**
- * Accessible state name. The vocabulary matches what the legend shows, so the announcement of
- * a cell ("B4, hit") lines up with what a sighted player reads off the board.
+ * Accessible state name. The vocabulary matches what the board shows, so the announcement of a
+ * cell ("B4, hit") lines up with what a sighted player reads off the water.
  */
 const VARIANT_TEXT: Readonly<Record<CellVariant, string>> = {
   water: 'unknown',
@@ -50,21 +49,22 @@ const ANIMATION_CLASS: Readonly<Record<Exclude<CellAnimation, null>, string>> = 
 function CellMark({ variant }: { readonly variant: CellVariant }) {
   switch (variant) {
     case 'miss':
-      // Hollow ring: reads as "nothing here".
+      // Settled ripple: reads as water closing over nothing.
       return (
-        <svg viewBox="0 0 24 24" aria-hidden className="h-1/3 w-1/3">
-          <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="4" />
+        <svg viewBox="0 0 24 24" aria-hidden className="h-1/2 w-1/2">
+          <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <circle cx="12" cy="12" r="2.4" fill="currentColor" opacity="0.7" />
         </svg>
       );
     case 'hit':
       // Solid cross: reads as an impact.
       return (
-        <svg viewBox="0 0 24 24" aria-hidden className="h-2/3 w-2/3">
+        <svg viewBox="0 0 24 24" aria-hidden className="h-1/2 w-1/2">
           <path
             d="M6 6 L18 18 M18 6 L6 18"
             fill="none"
             stroke="currentColor"
-            strokeWidth="4.5"
+            strokeWidth="3.6"
             strokeLinecap="round"
           />
         </svg>
@@ -72,25 +72,34 @@ function CellMark({ variant }: { readonly variant: CellVariant }) {
     case 'sunk':
       // Cross inside a frame, on hatching: an impact that finished a ship.
       return (
-        <svg viewBox="0 0 24 24" aria-hidden className="h-3/4 w-3/4">
-          <rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" />
-          <path
-            d="M7 7 L17 17 M17 7 L7 17"
+        <svg viewBox="0 0 24 24" aria-hidden className="h-2/3 w-2/3">
+          <rect
+            x="3.5"
+            y="3.5"
+            width="17"
+            height="17"
+            rx="3"
             fill="none"
             stroke="currentColor"
-            strokeWidth="4"
+            strokeWidth="1.2"
+          />
+          <path
+            d="M8 8 L16 16 M16 8 L8 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.6"
             strokeLinecap="round"
           />
         </svg>
       );
     case 'previewInvalid':
       return (
-        <svg viewBox="0 0 24 24" aria-hidden className="h-2/3 w-2/3">
+        <svg viewBox="0 0 24 24" aria-hidden className="h-1/2 w-1/2">
           <path
             d="M5 19 L19 5"
             fill="none"
             stroke="currentColor"
-            strokeWidth="4"
+            strokeWidth="3"
             strokeLinecap="round"
           />
         </svg>
@@ -139,12 +148,11 @@ export function Cell({
         onFocusCell?.(at);
         onHover?.(at);
       }}
-      className={`flex aspect-square items-center justify-center rounded-[0.2rem] border transition-[filter,background-color] duration-150 ${
+      /* `relative` gives the miss and hit animations their spray and ripple pseudo-elements. */
+      className={`relative flex aspect-square items-center justify-center transition-colors duration-150 ${
         VARIANT_CLASS[variant]
       } ${animation ? ANIMATION_CLASS[animation] : ''} ${
-        interactive
-          ? 'cursor-pointer hover:brightness-125 hover:ring-1 hover:ring-sky-300/70 hover:ring-inset'
-          : 'cursor-default'
+        interactive ? 'cursor-pointer hover:bg-white/40' : 'cursor-default'
       }`}
     >
       <CellMark variant={variant} />

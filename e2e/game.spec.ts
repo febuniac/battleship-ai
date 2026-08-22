@@ -62,11 +62,11 @@ test('plays a seeded game from placement through victory back to a clean board',
   const firstMiss = waterCells[0] as Coord;
   await enemyCell(page, firstMiss).click();
   await expect(enemyCell(page, firstMiss)).toHaveAttribute('data-state', 'miss');
-  const aiLogEntries = page
-    .getByRole('region', { name: 'Shot log' })
-    .getByRole('listitem')
-    .filter({ hasText: /^AI / });
-  await expect(aiLogEntries.first()).toBeVisible();
+  // The AI's shots land on the player's own water, and the contextual line reports the last one.
+  await expect(
+    page.getByRole('region', { name: 'Your waters' }).locator('[data-state="miss"]'),
+  ).not.toHaveCount(0);
+  await expect(page.getByTestId('status-line')).toContainText(/^AI /);
   await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
 
   // Sink the rest of the fleet. Every shot is a hit, so the turn never leaves the player.
@@ -106,14 +106,9 @@ test('is playable with the keyboard and announces what happened', async ({ page 
     'aria-label',
     /B2, (hit|miss|sunk)/,
   );
-  // The live region tracks the newest event, so the shot itself is asserted on the log, which
-  // keeps the history (a miss hands over to the AI, whose shot is announced next).
-  await expect(
-    page
-      .getByRole('region', { name: 'Shot log' })
-      .getByRole('listitem')
-      .filter({ hasText: /^You .* at B2$/ }),
-  ).toHaveCount(1);
+  // Both the visible status line and the live region reflect the shot; after a miss the AI
+  // immediately answers, so either the player's shot or the AI's reply may be the latest event.
+  await expect(page.getByTestId('status-line')).toContainText(/at B2|^AI /);
   await expect(page.getByRole('status')).toContainText(/at B2|Your turn|AI is thinking/);
 });
 
