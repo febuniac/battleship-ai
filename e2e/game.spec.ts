@@ -81,6 +81,23 @@ test('plays a seeded game from placement through victory back to a clean board',
   await expect(page.getByTestId('status-line')).toContainText(/^AI /);
   await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
 
+  // New game asks first, and cancelling leaves the game exactly as it was.
+  const shotsBefore = await page
+    .getByRole('region', { name: 'Enemy waters' })
+    .locator('[data-state="hit"], [data-state="sunk"], [data-state="miss"]')
+    .count();
+  await page.getByRole('button', { name: 'New game' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Start a new game?' });
+  await expect(confirm.getByText('Your current game will be lost.')).toBeVisible();
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  await expect(confirm).toBeHidden();
+  await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
+  await expect(
+    page
+      .getByRole('region', { name: 'Enemy waters' })
+      .locator('[data-state="hit"], [data-state="sunk"], [data-state="miss"]'),
+  ).toHaveCount(shotsBefore);
+
   // Sink the rest of the fleet. Every shot is a hit, so the turn never leaves the player.
   for (const at of shipCells.slice(1)) {
     await enemyCell(page, at).click();

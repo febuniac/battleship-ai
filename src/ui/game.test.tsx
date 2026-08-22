@@ -300,6 +300,55 @@ describe('Battleship app', () => {
       expect(isLocked(enemyCell(aiWaterCells[1] as Coord))).toBe(true);
     });
 
+    it('asks before throwing a game away, and Cancel changes nothing', async () => {
+      const target = aiShipCells[0] as Coord;
+      await user.click(enemyCell(target));
+      const shotsBefore = aiShotCount();
+
+      const newGame = screen.getByRole('button', { name: 'New game' });
+      await user.click(newGame);
+
+      const dialog = screen.getByRole('dialog', { name: 'Start a new game?' });
+      expect(within(dialog).getByText('Your current game will be lost.')).toBeDefined();
+      // Opening the dialog is inert: same turn, same shots, same board.
+      expect(banner()).toBe(YOUR_TURN);
+      expect(enemyCell(target).getAttribute('aria-label')).toMatch(/, (hit|sunk)$/);
+      expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(newGame);
+      expect(banner()).toBe(YOUR_TURN);
+      expect(aiShotCount()).toBe(shotsBefore);
+      expect(enemyCell(target).getAttribute('aria-label')).toMatch(/, (hit|sunk)$/);
+      expect(screen.getByRole('region', { name: 'Enemy waters' })).toBeDefined();
+    });
+
+    it('closes the confirmation with Escape and keeps the game', async () => {
+      const target = aiShipCells[0] as Coord;
+      await user.click(enemyCell(target));
+      await user.click(screen.getByRole('button', { name: 'New game' }));
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'New game' }));
+      expect(enemyCell(target).getAttribute('aria-label')).toMatch(/, (hit|sunk)$/);
+    });
+
+    it('resets to a clean placement screen once the new game is confirmed', async () => {
+      await user.click(enemyCell(aiShipCells[0] as Coord));
+      await user.click(screen.getByRole('button', { name: 'New game' }));
+      const dialog = screen.getByRole('dialog', { name: 'Start a new game?' });
+      await user.click(within(dialog).getByRole('button', { name: 'New game' }));
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.getByRole('heading', { name: 'Deploy your fleet' })).toBeDefined();
+      expect(placedShips()).toHaveLength(0);
+      // Placement, not the opening screen.
+      expect(screen.queryByText('Sink the enemy fleet before they sink yours.')).toBeNull();
+    });
+
     it('ends the game, blocks further fire and resets cleanly on Play again', async () => {
       for (const cell of aiShipCells) {
         await user.click(enemyCell(cell));

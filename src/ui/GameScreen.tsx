@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { coordKey, isSunk, sameCoord, shipAt, shotAt } from '../engine/board.ts';
 import { FLEET } from '../engine/rules.ts';
 import type {
@@ -11,6 +11,7 @@ import type {
 import { battleAnnouncement, describeShot } from './announcements.ts';
 import { AppHeader } from './components/AppHeader.tsx';
 import { Board } from './components/Board.tsx';
+import { ConfirmNewGame } from './components/ConfirmNewGame.tsx';
 import type { CellAnimation, CellVariant } from './components/Cell.tsx';
 import { GameOverOverlay } from './components/GameOverOverlay.tsx';
 import { LiveRegion } from './components/LiveRegion.tsx';
@@ -52,6 +53,9 @@ export function GameScreen({ game }: { readonly game: Game }) {
     readonly reason: IllegalReason;
     readonly afterShots: number;
   } | null>(null);
+  // Purely presentational: the game is untouched until the player confirms.
+  const [confirmingNewGame, setConfirmingNewGame] = useState(false);
+  const newGameRef = useRef<HTMLButtonElement>(null);
 
   const enemyBoard = state.boards.ai;
   const ownBoard = state.boards.human;
@@ -97,8 +101,11 @@ export function GameScreen({ game }: { readonly game: Game }) {
         <div className="flex items-center gap-4 sm:gap-6">
           <TurnBanner state={state} aiThinking={aiThinking} />
           <button
+            ref={newGameRef}
             type="button"
-            onClick={() => game.reset()}
+            onClick={() => {
+              setConfirmingNewGame(true);
+            }}
             className="glass-button min-h-11 rounded-full px-4 text-sm"
           >
             New game
@@ -140,6 +147,19 @@ export function GameScreen({ game }: { readonly game: Game }) {
         {status.text}
       </StatusLine>
       <p className="sr-only">Keyboard: arrow keys move across the grid, Enter fires.</p>
+
+      {confirmingNewGame ? (
+        <ConfirmNewGame
+          onCancel={() => {
+            setConfirmingNewGame(false);
+            newGameRef.current?.focus();
+          }}
+          onConfirm={() => {
+            setConfirmingNewGame(false);
+            game.reset();
+          }}
+        />
+      ) : null}
 
       {state.phase === 'gameOver' ? (
         <GameOverOverlay state={state} onPlayAgain={() => game.reset()} />
