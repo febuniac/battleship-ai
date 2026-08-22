@@ -79,7 +79,13 @@ export function GameScreen({ game }: { readonly game: Game }) {
         <div className="flex flex-col gap-3">
           <Board
             label="Enemy waters"
-            caption={playable ? 'Click a cell to fire' : 'Locked while the AI plays'}
+            caption={
+              state.phase === 'gameOver'
+                ? 'Game over'
+                : playable
+                  ? 'Click a cell to fire'
+                  : 'Locked while the AI plays'
+            }
             variantAt={enemyVariant}
             animationAt={(at) => animationFor(last, 'human', at)}
             onSelect={(at) => {
