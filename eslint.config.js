@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage'] },
+  { ignores: ['dist', 'coverage', 'playwright-report', 'test-results'] },
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   {
@@ -39,5 +39,5 @@ export default tseslint.config(
     },
   },
   { files: ['**/*.js'], extends: [tseslint.configs.disableTypeChecked] },
-  { files: ['scripts/**/*.ts'], languageOptions: { globals: globals.node } },
+  { files: ['scripts/**/*.ts', 'e2e/**/*.ts'], languageOptions: { globals: globals.node } },
 );
