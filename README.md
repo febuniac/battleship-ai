@@ -9,7 +9,9 @@ network calls, no persistence.
 
 1. **Start game** on the opening screen to enter placement.
 2. **Place your fleet.** Pick a ship from the tray, press **Rotate** (or `R`) to switch
-   orientation, then click a cell to drop it. Clicking a placed ship picks it back up.
+   orientation, then click a cell to drop it. Pick a placed ship back up by choosing it in the
+   tray, or by clicking it on the board once the fleet is complete. A rejected placement never
+   touches the ships already on the water.
    **Randomize fleet** places all five for you; **Begin battle** unlocks once the fleet is legal.
 3. **Fire.** Click a cell on _Enemy waters_. A hit keeps your turn, a miss hands over to the AI,
    which then fires until it misses.

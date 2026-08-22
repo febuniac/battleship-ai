@@ -97,7 +97,12 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
 
   const onCellSelect = (at: Coord) => {
     const existing = shipAt(board, at);
-    if (existing) {
+    /*
+     * A cell holding a ship only picks that ship back up when nothing is waiting to be placed.
+     * While a ship is being placed the click stays a placement attempt, so an overlapping attempt
+     * is rejected by the engine and leaves the placed ship untouched.
+     */
+    if (existing && activeShip === null) {
       game.remove(existing.id);
       setSelected(existing.id);
       setOrientation(existing.orientation);

@@ -3,7 +3,42 @@
 Only bugs that were actually reproduced are listed here. Each one was seen in the running game
 before it was fixed.
 
-## Bug 1: Muted text was too pale to read
+## Bug 1: An invalid overlapping placement deleted the ship it overlapped
+
+**What happened:**
+During placement, with the Carrier already on the board, selecting the Battleship and trying to
+drop it on top of the Carrier was correctly rejected — but the Carrier was taken off the board at
+the same time, and the selection jumped from the Battleship back to the Carrier. The player had to
+place the Carrier all over again, and it was easy not to notice that it had gone.
+
+**How we found it:**
+Manual QA of the placement screen: place one ship, select another, aim it deliberately at the first
+one.
+
+**Why it happened:**
+Clicking a cell meant two different things. Clicking an occupied cell was the shortcut for "pick
+that ship back up", and that check ran first — before the placement attempt. So a click that the
+player intended as "put the Battleship here" was read as "lift the Carrier", and the rejection
+message that followed described a board that had already been changed.
+
+**How we fixed it:**
+A click on an occupied cell only picks that ship up when no ship is waiting to be placed. While a
+ship is selected for placement the click stays a placement attempt, so the engine rejects it and
+nothing on the board changes. Ships can still be picked up deliberately from the fleet list at any
+time.
+
+**How we verified the fix:**
+We reproduced the bug in Chrome on the old code (the Carrier disappeared and the selection
+changed), then re-ran the same steps on the fix: the placement is rejected, the Carrier stays
+exactly where it was, "Overlaps Carrier" is shown, the Battleship stays selected and places
+normally on the next click. Seven automated placement tests now cover full overlap, partial
+overlap, a perpendicular crossing, overlapping a vertical ship and an off-board attempt, each
+asserting the existing ship keeps its exact cells and orientation.
+
+**Severity:**
+High
+
+## Bug 2: Muted text was too pale to read
 
 **What happened:**
 Small grey text around the game — the board captions, the coordinate letters and numbers, the
@@ -35,7 +70,7 @@ the fix.
 **Severity:**
 Medium
 
-## Bug 2: The enemy board still said "locked" after you won
+## Bug 3: The enemy board still said "locked" after you won
 
 **What happened:**
 After sinking the last enemy ship, the caption under the enemy board read "Locked while the AI
@@ -60,7 +95,7 @@ plays a full game and asserts the finished board is locked and shows the game-ov
 **Severity:**
 Low
 
-## Bug 3: Vertical ships looked like thin slivers
+## Bug 4: Vertical ships looked like thin slivers
 
 **What happened:**
 When the new realistic ship graphics shipped, ships placed vertically rendered as very narrow
@@ -87,7 +122,7 @@ measured the rendered ship graphics to confirm they span their cells rather than
 **Severity:**
 Medium
 
-## Bug 4: Cruiser and Submarine were impossible to tell apart on a phone
+## Bug 5: Cruiser and Submarine were impossible to tell apart on a phone
 
 **What happened:**
 The Cruiser and the Submarine both occupy three cells, and at phone size their silhouettes looked
@@ -114,17 +149,19 @@ Low
 
 ## QA Summary
 
-- **Real bugs found:** 4
-- **Bugs fixed:** 4
-- **By severity:** Critical 0 · High 0 · Medium 2 · Low 2
+- **Real bugs found:** 5
+- **Bugs fixed:** 5
+- **By severity:** Critical 0 · High 1 · Medium 2 · Low 2
 
-**Most important bug:** the pale text (Bug 1). It was the only one that affected whether people can
-actually use the product rather than how it looks, and it applied to almost every screen.
+**Most important bug:** the overlapping placement deleting an already-placed ship (Bug 1). It was
+the only bug that destroyed work the player had already done, and it happened during a completely
+ordinary action.
 
-**Most valuable test:** the automated contrast measurement added in final QA. It found a real
-accessibility problem that four rounds of looking at the screen had missed, and it now protects the
-palette permanently. Manual play-through in Chrome was the runner-up: it is what exposed the wrong
-game-over caption and both ship-drawing problems, none of which any logic test would catch.
+**Most valuable test:** manual play in the browser. Every bug except the contrast failure was found
+by a person using the game — the destructive placement, the wrong game-over caption and both
+ship-drawing problems. The runner-up is the automated contrast measurement added in final QA: it
+found a real accessibility problem that four rounds of looking at the screen had missed, and it now
+protects the palette permanently.
 
 **Known limitations:**
 
@@ -142,7 +179,7 @@ Everything below was run on the final commit of this branch.
 | Check                                                                                           | Result                                                                |
 | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Typecheck, lint, format                                                                         | pass                                                                  |
-| Unit / UI tests (Vitest, engine + jsdom)                                                        | 127 passed, 0 failed                                                  |
+| Unit / UI tests (Vitest, engine + jsdom)                                                        | 133 passed, 0 failed                                                  |
 | Coverage (engine + AI)                                                                          | 96.6% statements, 92.1% branches, 100% functions (thresholds 90%)     |
 | End-to-end (Playwright, Chromium, production bundle)                                            | 4 passed                                                              |
 | Production build                                                                                | pass — 219 kB JS / 34 kB CSS (69 kB / 7 kB gzipped)                   |
@@ -152,4 +189,5 @@ Everything below was run on the final commit of this branch.
 | Contrast (5 screens, glass surfaces composited)                                                 | pass at WCAG AA                                                       |
 | Responsive (1440 desktop, 1024/834 tablet, 390 mobile)                                          | 33 checks passed, no horizontal overflow, no clipped boards or ships  |
 | Opening screen and rules modal                                                                  | 39 checks passed                                                      |
-| Placement (all five ships, rotation, invalid, overlap, out of bounds, randomize, clear, gating) | 28 checks passed                                                      |
+| Placement (all five ships, rotation, invalid, overlap, out of bounds, randomize, clear, gating) | 29 checks passed                                                      |
+| Non-destructive invalid placement (browser, reproduced before the fix, passing after)           | 17 checks passed                                                      |

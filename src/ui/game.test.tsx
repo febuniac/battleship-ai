@@ -55,6 +55,31 @@ function placedShips(): string[] {
   );
 }
 
+function trayRow(shipId: string): HTMLElement {
+  const tray = screen.getByRole('list', { name: 'Fleet' });
+  const row = tray.querySelector<HTMLElement>(`[data-ship-row="${shipId}"]`);
+  if (row === null) throw new Error(`no tray row for ${shipId}`);
+  return row;
+}
+
+/**
+ * Where a ship sits on the water, read off its silhouette: the grid area encodes origin, length
+ * and orientation, so comparing it detects any move, rotation or removal.
+ */
+function shipArea(shipId: string): string {
+  const sprite = sprites('Your waters', shipId)[0];
+  const layer = sprite?.parentElement;
+  if (layer == null) return 'absent';
+  return `${layer.style.gridColumn} / ${layer.style.gridRow}`;
+}
+
+function ownShipCells(): string[] {
+  const board = screen.getByRole('region', { name: 'Your waters' });
+  return [...board.querySelectorAll<HTMLElement>('[data-coord]')]
+    .filter((cell) => (cell.getAttribute('aria-label') ?? '').endsWith('your ship'))
+    .map((cell) => cell.dataset.coord ?? '');
+}
+
 function announcement(): string {
   return screen.getByRole('status').textContent ?? '';
 }
@@ -129,12 +154,88 @@ describe('Battleship app', () => {
       expect(start).toHaveProperty('disabled', false);
     });
 
-    it('removes a placed ship when its cell is clicked again', async () => {
+    it('picks a placed ship back up from the tray', async () => {
       await user.click(ownCell({ r: 0, c: 0 }));
       expect(placedShips()).toEqual(['carrier']);
 
-      await user.click(ownCell({ r: 0, c: 0 }));
+      await user.click(trayRow('carrier'));
       expect(placedShips()).toHaveLength(0);
+      expect(announcement()).toBe('Carrier selected');
+    });
+
+    it('picks a placed ship back up from the board once nothing is pending', async () => {
+      await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
+      expect(placedShips()).toHaveLength(5);
+
+      const board = screen.getByRole('region', { name: 'Your waters' });
+      const occupied = within(board).getAllByRole('button', { name: /, your ship$/ })[0];
+      if (occupied === undefined) throw new Error('expected a randomized fleet');
+      await user.click(occupied);
+
+      expect(placedShips()).toHaveLength(4);
+      expect(announcement()).toContain('removed');
+    });
+
+    /*
+     * An invalid placement must be atomic: the engine's rejection has to leave the board exactly
+     * as it was, including the ship the player was trying to overlap.
+     */
+    describe('rejecting an invalid placement', () => {
+      /** Every legal shape of rejection, each aimed at the placed Carrier or the board edge. */
+      const cases = [
+        { name: 'fully overlapping a horizontal ship', at: { r: 0, c: 0 }, rotate: false },
+        { name: 'partially overlapping a horizontal ship', at: { r: 0, c: 3 }, rotate: false },
+        { name: 'crossing a horizontal ship at right angles', at: { r: 0, c: 2 }, rotate: true },
+        { name: 'running off the board', at: { r: 5, c: 8 }, rotate: false },
+      ] as const;
+
+      for (const { name, at, rotate } of cases) {
+        it(`keeps the fleet intact when ${name}`, async () => {
+          // Carrier at A1..E1, horizontal.
+          await user.click(ownCell({ r: 0, c: 0 }));
+          const carrierBefore = shipArea('carrier');
+          expect(carrierBefore).toBe('1 / span 5 / 1');
+          // Placing the Carrier advanced the selection to the Battleship.
+          expect(trayRow('battleship').getAttribute('aria-pressed')).toBe('true');
+
+          if (rotate) await user.keyboard('r');
+          await user.click(ownCell(at));
+
+          // The rejected ship is not placed and the Carrier is untouched, orientation included.
+          expect(placedShips()).toEqual(['carrier']);
+          expect(shipArea('carrier')).toBe(carrierBefore);
+          expect(status()).toMatch(/Overlaps Carrier|extend off the board/);
+          // The rejected footprint marks the cells under the cursor; the Carrier is whole again
+          // as soon as the cursor leaves.
+          await user.unhover(ownCell(at));
+          expect(ownShipCells()).toEqual(['A1', 'B1', 'C1', 'D1', 'E1']);
+          // The Battleship is still the ship being placed, so another position can be tried.
+          expect(trayRow('battleship').getAttribute('aria-pressed')).toBe('true');
+
+          if (rotate) await user.keyboard('r');
+          await user.click(ownCell({ r: 5, c: 0 }));
+          expect(placedShips()).toEqual(['carrier', 'battleship']);
+          expect(shipArea('carrier')).toBe(carrierBefore);
+          expect(shipArea('battleship')).toBe('1 / span 4 / 6');
+        });
+      }
+
+      it('keeps a vertical ship intact when a placement crosses it', async () => {
+        // Carrier at A1..A5, vertical.
+        await user.keyboard('r');
+        await user.click(ownCell({ r: 0, c: 0 }));
+        expect(shipArea('carrier')).toBe('1 / 1 / span 5');
+
+        // Back to horizontal, then straight through the Carrier's third cell.
+        await user.keyboard('r');
+        await user.click(ownCell({ r: 2, c: 0 }));
+
+        expect(placedShips()).toEqual(['carrier']);
+        expect(shipArea('carrier')).toBe('1 / 1 / span 5');
+        expect(status()).toContain('Overlaps Carrier');
+        await user.unhover(ownCell({ r: 2, c: 0 }));
+        expect(ownShipCells()).toEqual(['A1', 'A2', 'A3', 'A4', 'A5']);
+      });
     });
 
     it('rotates with the R shortcut', async () => {
