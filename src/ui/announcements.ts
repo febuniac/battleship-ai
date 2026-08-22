@@ -18,6 +18,22 @@ export function describeShot(entry: LogEntry): string {
 }
 
 /**
+ * The same shot as a compact visible headline: the outcome first, because that is what the player
+ * is looking for. A plain hit names only the square — which enemy ship was struck stays hidden
+ * until it sinks. A shot at the player's own fleet may name the vessel, since they can see it.
+ */
+export function shotHeadline(entry: LogEntry, hitShipName?: string): string {
+  const who = entry.player === 'human' ? '' : 'AI ';
+  const detail =
+    entry.sunkShipId !== undefined
+      ? shipSpec(entry.sunkShipId).name
+      : (hitShipName ?? coordLabel(entry.at));
+
+  if (entry.sunkShipId !== undefined) return `${who}SUNK · ${detail}`;
+  return `${who}${entry.outcome === 'miss' ? 'MISS' : 'HIT'} · ${detail}`;
+}
+
+/**
  * What the live region should say for the current state. It is *derived* rather than pushed, so
  * a re-render with unchanged state produces identical text and nothing is announced twice.
  */

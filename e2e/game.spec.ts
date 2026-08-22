@@ -30,6 +30,9 @@ async function startBattle(page: Page): Promise<void> {
   await page.goto(URL);
   // The opening screen comes first; placement is one click away.
   await expect(page.getByText('Sink the enemy fleet before they sink yours.')).toBeVisible();
+  // The objective and the turn rule are on the opening screen, before the detailed rules.
+  await expect(page.getByRole('heading', { name: 'How to play' })).toBeVisible();
+  await expect(page.getByText('Hit = fire again · Miss = turn changes')).toBeVisible();
 
   // The rules are a modal on the opening screen and must not start anything.
   await page.getByRole('button', { name: 'The rules' }).click();
@@ -69,11 +72,17 @@ test('plays a seeded game from placement through victory back to a clean board',
   await enemyCell(page, firstHit).click();
   await expect(enemyCell(page, firstHit)).toHaveAttribute('data-state', /hit|sunk/);
   await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
+  // Hit and miss must be readable apart at a glance: an impact mark against a splash.
+  await expect(page.getByTestId('status-line')).toHaveText(/^(HIT|SUNK) · /);
+  await expect(page.getByTestId('status-line')).toHaveAttribute('data-tone', 'impact');
+  await expect(enemyCell(page, firstHit).locator('svg path')).toHaveCount(1);
 
   // A miss hands the turn to the AI, which then plays until it misses.
   const firstMiss = waterCells[0] as Coord;
   await enemyCell(page, firstMiss).click();
   await expect(enemyCell(page, firstMiss)).toHaveAttribute('data-state', 'miss');
+  // Water keeps its plain ripple: no impact fragments, so the outcomes never look alike.
+  await expect(enemyCell(page, firstMiss).locator('svg path')).toHaveCount(0);
   // The AI's shots land on the player's own water, and the contextual line reports the last one.
   await expect(
     page.getByRole('region', { name: 'Your waters' }).locator('[data-state="miss"]'),

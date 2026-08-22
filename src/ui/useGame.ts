@@ -17,7 +17,10 @@ import type {
 export interface UseGameOptions {
   /** Fixed seed for reproducible games; defaults to a fresh random one per mount. */
   readonly seed?: number;
-  /** Delay before each AI shot, so a streak reads as a sequence rather than a jump. */
+  /**
+   * Delay before each AI shot, so the player can read their own result, see the turn change and
+   * follow a streak as a sequence rather than a jump. Purely cosmetic: the engine never sees it.
+   */
   readonly aiDelayMs?: number;
   readonly strategy?: AIStrategyId;
 }
@@ -39,6 +42,12 @@ export interface Game {
   reset(): IllegalReason | null;
 }
 
+/**
+ * How long the AI appears to think before each of its shots. Long enough that the result of the
+ * player's own shot registers and the turn change is noticed, short enough not to feel sluggish.
+ */
+const AI_THINKING_MS = 1150;
+
 /** New games get a random seed; the engine itself never touches `Math.random`. */
 function freshSeed(): number {
   return Math.floor(Math.random() * 2 ** 31);
@@ -51,7 +60,7 @@ function freshSeed(): number {
  * `IllegalReason` to the caller for display.
  */
 export function useGame(options: UseGameOptions = {}): Game {
-  const { seed, aiDelayMs = 550, strategy } = options;
+  const { seed, aiDelayMs = AI_THINKING_MS, strategy } = options;
 
   const [initialSeed] = useState(() => seed ?? freshSeed());
   const [state, setState] = useState<GameState>(() => createInitialState(initialSeed));

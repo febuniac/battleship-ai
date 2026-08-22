@@ -54,6 +54,8 @@ export interface BoardProps {
   /** Holds the hint line's space open so a hintless board's grid stays level with its sibling. */
   readonly hintSpacer?: boolean;
   readonly side: keyof typeof SIDE_CLASS;
+  /** Which water the player should be looking at: the one they can act on, or the one they wait on. */
+  readonly emphasis?: 'active' | 'idle';
   readonly variantAt: (at: Coord) => CellVariant;
   readonly animationAt?: (at: Coord) => CellAnimation;
   /**
@@ -85,6 +87,7 @@ export function Board({
   hint,
   hintSpacer = false,
   side,
+  emphasis,
   variantAt,
   animationAt,
   ships,
@@ -164,7 +167,10 @@ export function Board({
         <div
           ref={gridRef}
           onKeyDown={onKeyDown}
-          className={`ocean ocean-grid relative overflow-hidden rounded-xl sm:rounded-2xl ${SIDE_CLASS[side]}`}
+          data-emphasis={emphasis}
+          className={`ocean ocean-grid relative overflow-hidden rounded-xl sm:rounded-2xl ${
+            SIDE_CLASS[side]
+          } ${emphasis === undefined ? '' : `ocean-${emphasis}`}`}
         >
           <ShipLayer ships={afloat} />
           <div className="relative grid grid-cols-10">

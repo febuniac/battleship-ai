@@ -18,7 +18,7 @@ export function TurnBanner({ state, aiThinking }: TurnBannerProps) {
       ? 'You win'
       : 'The AI wins'
     : aiThinking
-      ? 'AI is thinking'
+      ? "AI's turn"
       : 'Your turn';
 
   return (
@@ -26,15 +26,17 @@ export function TurnBanner({ state, aiThinking }: TurnBannerProps) {
       // Remounting on each phase/turn change replays the transition animation.
       key={`${state.phase}-${aiThinking ? 'ai' : 'human'}`}
       data-testid="turn-banner"
-      className="animate-turn-change flex items-center gap-2 text-sm font-medium text-ink"
+      className="animate-turn-change flex items-baseline gap-2 text-sm text-ink"
     >
       <span
         aria-hidden
-        className={`h-1.5 w-1.5 rounded-full ${
+        className={`relative top-[-0.15rem] h-1.5 w-1.5 shrink-0 rounded-full ${
           over ? 'bg-ink-faint' : aiThinking ? 'animate-thinking-pulse bg-impact' : 'bg-signal'
         }`}
       />
-      {text}
+      <span className="font-semibold tracking-[0.12em] uppercase">{text}</span>
+      {/* Why the board is not answering yet. Secondary to the turn itself. */}
+      {aiThinking ? <span className="text-xs text-ink-faint">AI is thinking…</span> : null}
     </p>
   );
 }

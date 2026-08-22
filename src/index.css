@@ -110,6 +110,24 @@
       inset 0 1px 0 color-mix(in oklab, white 70%, transparent),
       inset 0 -14px 28px -18px color-mix(in oklab, var(--color-ink) 40%, transparent),
       0 24px 48px -28px color-mix(in oklab, var(--color-ink) 40%, transparent);
+    transition:
+      opacity 260ms ease,
+      outline-color 260ms ease,
+      box-shadow 260ms ease;
+  }
+
+  /*
+   * Whose water matters right now. The board that can be acted on is outlined in the signal
+   * colour; the one that is only being watched settles back. Emphasis is carried by the water
+   * alone, so every label and marker keeps its own contrast.
+   */
+  .ocean-active {
+    outline: 2px solid color-mix(in oklab, var(--color-signal) 14%, transparent);
+    outline-offset: 2px;
+  }
+
+  .ocean-idle {
+    opacity: 0.66;
   }
 
   /*

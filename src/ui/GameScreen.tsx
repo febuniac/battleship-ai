@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { coordKey, isSunk, sameCoord, shipAt, shotAt } from '../engine/board.ts';
-import { FLEET } from '../engine/rules.ts';
+import { FLEET, shipSpec } from '../engine/rules.ts';
 import type {
   Board as BoardModel,
   Coord,
@@ -8,7 +8,7 @@ import type {
   LogEntry,
   Player,
 } from '../engine/types.ts';
-import { battleAnnouncement, describeShot } from './announcements.ts';
+import { battleAnnouncement, shotHeadline } from './announcements.ts';
 import { AppHeader } from './components/AppHeader.tsx';
 import { Board } from './components/Board.tsx';
 import { ConfirmNewGame } from './components/ConfirmNewGame.tsx';
@@ -86,11 +86,22 @@ export function GameScreen({ game }: { readonly game: Game }) {
   const enemyCaption = sunkCaption(enemyBoard);
   const ownCaption = sunkCaption(ownBoard);
 
+  // A shot at the player's own fleet may name the vessel struck; the enemy's stay anonymous.
+  const lastHitOwnShip =
+    last?.player === 'ai' && last.outcome !== 'miss' ? shipAt(ownBoard, last.at) : undefined;
+
   // One line of commentary: a rejected shot, otherwise whatever just landed.
   const status = rejection
     ? { tone: 'invalid' as const, text: reasonText(rejection), key: `reject-${state.log.length}` }
     : last
-      ? { tone: 'neutral' as const, text: describeShot(last), key: last.seq }
+      ? {
+          tone: last.outcome === 'miss' ? ('neutral' as const) : ('impact' as const),
+          text: shotHeadline(
+            last,
+            ...(lastHitOwnShip === undefined ? [] : [shipSpec(lastHitOwnShip.id).name]),
+          ),
+          key: last.seq,
+        }
       : { tone: 'neutral' as const, text: 'Battle stations — pick a target', key: 'start' };
 
   return (
@@ -118,8 +129,13 @@ export function GameScreen({ game }: { readonly game: Game }) {
         <Board
           label="Enemy waters"
           {...(enemyCaption === undefined ? {} : { caption: enemyCaption })}
-          {...(state.phase === 'playing' ? { hint: 'Select a position to attack.' } : {})}
+          {...(state.phase === 'playing'
+            ? // The line above the water says what to do now, or that there is nothing to do yet.
+              { hint: playable ? 'Select a position to attack.' : 'Wait for the AI to fire.' }
+            : {})}
           side="enemy"
+          // Emphasis follows the turn: the water that can be fired at is the one that stands out.
+          {...(state.phase === 'playing' ? { emphasis: playable ? 'active' : 'idle' } : {})}
           variantAt={enemyVariant}
           // Only sunk enemy hulls are drawn; an unhit ship is indistinguishable from open water.
           ships={visibleShips(enemyBoard, 'sunkOnly')}
@@ -139,6 +155,7 @@ export function GameScreen({ game }: { readonly game: Game }) {
           {...(ownCaption === undefined ? {} : { caption: ownCaption })}
           hintSpacer={state.phase === 'playing'}
           side="friendly"
+          {...(state.phase === 'playing' ? { emphasis: aiThinking ? 'active' : 'idle' } : {})}
           variantAt={ownVariant}
           ships={visibleShips(ownBoard, 'all')}
           animationAt={(at) => animationFor(last, 'ai', at)}

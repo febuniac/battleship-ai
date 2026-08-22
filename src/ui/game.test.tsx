@@ -12,7 +12,7 @@ const SEED = 20240617;
 const AI_DELAY = 50_000;
 
 const YOUR_TURN = 'Your turn';
-const AI_TURN = 'AI is thinking';
+const AI_TURN = "AI's turn";
 
 /** The AI fleet for `SEED` is known up front, so hits and misses can be chosen deliberately. */
 const aiBoard = createInitialState(SEED).boards.ai;
@@ -347,6 +347,50 @@ describe('Battleship app', () => {
       ).toBe(false);
     });
 
+    it('names the outcome of a shot without naming an enemy ship still afloat', async () => {
+      await user.click(enemyCell(aiShipCells[0] as Coord));
+      expect(status()).toMatch(/^(HIT · [A-J]\d+|SUNK · \w+)$/);
+      expect(screen.getByTestId('status-line').dataset.tone).toBe('impact');
+
+      await user.click(enemyCell(aiWaterCells[0] as Coord));
+      expect(status()).toMatch(/^MISS · [A-J]\d+$/);
+      expect(screen.getByTestId('status-line').dataset.tone).toBe('neutral');
+    });
+
+    it('marks a hit as an impact rather than a cross', async () => {
+      const target = aiShipCells[0] as Coord;
+      await user.click(enemyCell(target));
+
+      const mark = enemyCell(target).querySelector('svg');
+      // An impact point inside a shock ring, with fragments thrown clear — not a cross.
+      expect(mark?.querySelectorAll('circle')).toHaveLength(2);
+      expect(mark?.querySelectorAll('path')).toHaveLength(1);
+
+      await user.click(enemyCell(aiWaterCells[0] as Coord));
+      // Water keeps its plain ripple, so the two outcomes never look alike.
+      const splash = enemyCell(aiWaterCells[0] as Coord).querySelector('svg');
+      expect(splash?.querySelectorAll('path')).toHaveLength(0);
+    });
+
+    it('moves the emphasis to whichever water is in play', async () => {
+      const water = (label: string) =>
+        screen
+          .getByRole('region', { name: label })
+          .querySelector('.ocean')
+          ?.getAttribute('data-emphasis');
+
+      expect([water('Enemy waters'), water('Your waters')]).toEqual(['active', 'idle']);
+
+      await user.click(enemyCell(aiWaterCells[0] as Coord));
+
+      expect(banner()).toContain(AI_TURN);
+      expect(banner()).toContain('AI is thinking');
+      expect([water('Enemy waters'), water('Your waters')]).toEqual(['idle', 'active']);
+      // The board that cannot be fired at stops asking for a target.
+      expect(screen.queryByText('Select a position to attack.')).toBeNull();
+      expect(screen.getByText('Wait for the AI to fire.')).toBeDefined();
+    });
+
     it('moves focus into the enemy grid when the battle starts', () => {
       expect(document.activeElement).toBe(enemyCell({ r: 0, c: 0 }));
     });
@@ -394,7 +438,7 @@ describe('Battleship app', () => {
         // The contextual line is the only running commentary now that the log panel is gone.
         const latest = status();
         expect(latest).toMatch(/^AI /);
-        const hit = /hit|sank/.test(latest);
+        const hit = /HIT|SUNK/.test(latest);
         if (previousWasHit) sawStreakAfterHit = true;
         if (hit) {
           expect(banner()).toContain(AI_TURN);
@@ -499,6 +543,14 @@ describe('opening screen', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Battleship' })).toBeDefined();
     expect(screen.getByText('Sink the enemy fleet before they sink yours.')).toBeDefined();
+    // A first-time player learns the objective and how turns work without opening the rules.
+    expect(screen.getByRole('heading', { name: 'How to play' })).toBeDefined();
+    expect(
+      screen.getByText(
+        'Place your fleet. Take turns firing at the enemy. Hit all five ships to win.',
+      ),
+    ).toBeDefined();
+    expect(screen.getByText('Hit = fire again · Miss = turn changes')).toBeDefined();
     expect(screen.queryByRole('list', { name: 'Fleet' })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Start game' }));

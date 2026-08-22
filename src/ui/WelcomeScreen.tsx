@@ -22,7 +22,7 @@ export function WelcomeScreen({ onStart }: { readonly onStart: () => void }) {
   const rulesTriggerRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div className="mx-auto flex min-h-[80dvh] w-full max-w-[36rem] flex-col items-center justify-center gap-10 text-center sm:gap-12">
+    <div className="mx-auto flex min-h-[80dvh] w-full max-w-[36rem] flex-col items-center justify-center gap-9 text-center sm:gap-10">
       <div className="animate-fade-in flex flex-col items-center gap-5">
         <div className="flex flex-col items-center gap-2">
           <h1 className="text-2xl font-light tracking-[0.4em] text-ink uppercase sm:text-4xl">
@@ -49,6 +49,22 @@ export function WelcomeScreen({ onStart }: { readonly onStart: () => void }) {
             style={{ width, marginBottom: offset }}
           />
         ))}
+      </div>
+
+      {/*
+       * The three questions a first-time player has — what do I do, how do I win, how do turns
+       * work — answered in three lines. The complete rules stay behind THE RULES.
+       */}
+      <div className="flex max-w-[24rem] flex-col items-center gap-2">
+        <h2 className="text-[0.6rem] font-medium tracking-[0.22em] text-ink-faint uppercase">
+          How to play
+        </h2>
+        <p className="text-[0.82rem] leading-relaxed text-balance text-ink-soft">
+          Place your fleet. Take turns firing at the enemy. Hit all five ships to win.
+        </p>
+        <p className="text-[0.7rem] tracking-[0.04em] text-ink-faint">
+          Hit = fire again · Miss = turn changes
+        </p>
       </div>
 
       <div className="flex flex-col items-center gap-5">

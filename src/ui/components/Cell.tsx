@@ -57,20 +57,26 @@ function CellMark({ variant }: { readonly variant: CellVariant }) {
         </svg>
       );
     case 'hit':
-      // Solid cross: reads as an impact.
+      /*
+       * Impact on steel: the round's entry point, the shock ring around it and four fragments
+       * thrown clear. Deliberately not a cross — a cross reads as "wrong", not as damage.
+       */
       return (
-        <svg viewBox="0 0 24 24" aria-hidden className="h-1/2 w-1/2">
+        <svg viewBox="0 0 24 24" aria-hidden className="h-2/3 w-2/3">
+          <circle cx="12" cy="12" r="7.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="12" cy="12" r="3.3" fill="currentColor" />
           <path
-            d="M6 6 L18 18 M18 6 L6 18"
+            d="M17.6 17.6 L19.9 19.9 M6.4 17.6 L4.1 19.9 M17.6 6.4 L19.9 4.1 M6.4 6.4 L4.1 4.1"
             fill="none"
             stroke="currentColor"
-            strokeWidth="3.6"
+            strokeWidth="1.7"
             strokeLinecap="round"
+            opacity="0.65"
           />
         </svg>
       );
     case 'sunk':
-      // Cross inside a frame, on hatching: an impact that finished a ship.
+      // The same impact point, framed on hatching: damage that finished a ship.
       return (
         <svg viewBox="0 0 24 24" aria-hidden className="h-2/3 w-2/3">
           <rect
@@ -83,13 +89,7 @@ function CellMark({ variant }: { readonly variant: CellVariant }) {
             stroke="currentColor"
             strokeWidth="1.2"
           />
-          <path
-            d="M8 8 L16 16 M16 8 L8 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.6"
-            strokeLinecap="round"
-          />
+          <circle cx="12" cy="12" r="3.4" fill="currentColor" />
         </svg>
       );
     case 'previewInvalid':
