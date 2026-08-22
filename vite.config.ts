@@ -5,8 +5,22 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
+    // Engine and AI tests stay in Node; only the React tests pay for a DOM.
+    projects: [
+      {
+        extends: true,
+        test: { name: 'engine', environment: 'node', include: ['src/**/*.test.ts'] },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'ui',
+          environment: 'jsdom',
+          include: ['src/**/*.test.tsx'],
+          setupFiles: ['src/ui/testSetup.ts'],
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
