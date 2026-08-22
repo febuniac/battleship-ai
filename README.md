@@ -55,7 +55,8 @@ npm run test:coverage  # engine + AI, 90% thresholds
 npm run simulate       # 500 headless AI-vs-AI games: winners, shot distribution, illegal moves
 ```
 
-Requires Node ≥ 22.6 (see `.nvmrc`); the self-play script runs TypeScript directly.
+Requires Node ≥ 22.12 (see `.nvmrc`, pinned to the current 22 LTS patch): Vite 8 needs 22.12+, and
+`npm run simulate` relies on Node running TypeScript directly.
 
 ## Testing strategy
 
