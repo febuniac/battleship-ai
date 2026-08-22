@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { coordKey, isSunk, sameCoord, shipAt, shotAt } from '../engine/board.ts';
-import type { Coord, IllegalReason, LogEntry, Player } from '../engine/types.ts';
+import type {
+  Board as BoardModel,
+  Coord,
+  IllegalReason,
+  LogEntry,
+  Player,
+} from '../engine/types.ts';
 import { battleAnnouncement } from './announcements.ts';
 import { Board } from './components/Board.tsx';
 import type { CellAnimation, CellVariant } from './components/Cell.tsx';
@@ -8,11 +14,24 @@ import { FleetStatus } from './components/FleetStatus.tsx';
 import { GameOverOverlay } from './components/GameOverOverlay.tsx';
 import { Legend } from './components/Legend.tsx';
 import { LiveRegion } from './components/LiveRegion.tsx';
+import type { ShipVisual } from './components/ShipLayer.tsx';
 import { StatusLog } from './components/StatusLog.tsx';
 import { TurnBanner } from './components/TurnBanner.tsx';
 import { ValidationHint } from './components/ValidationHint.tsx';
 import { reasonText } from './messages.ts';
 import type { Game } from './useGame.ts';
+
+/** Ships the viewer is entitled to see: their own fleet, and enemy hulls the engine reports sunk. */
+function visibleShips(board: BoardModel, reveal: 'all' | 'sunkOnly'): readonly ShipVisual[] {
+  return board.ships
+    .filter((ship) => reveal === 'all' || isSunk(ship))
+    .map((ship) => ({
+      shipId: ship.id,
+      origin: ship.origin,
+      orientation: ship.orientation,
+      tone: isSunk(ship) ? ('wreck' as const) : ('fleet' as const),
+    }));
+}
 
 /** The most recent shot animates once, on whichever board received it. */
 function animationFor(last: LogEntry | undefined, attacker: Player, at: Coord): CellAnimation {
@@ -86,7 +105,10 @@ export function GameScreen({ game }: { readonly game: Game }) {
                   ? 'Click a cell to fire'
                   : 'Locked while the AI plays'
             }
+            side="enemy"
             variantAt={enemyVariant}
+            // Only sunk enemy hulls are drawn; an unhit ship is indistinguishable from open water.
+            ships={visibleShips(enemyBoard, 'sunkOnly')}
             animationAt={(at) => animationFor(last, 'human', at)}
             onSelect={(at) => {
               const reason = game.fire(at);
@@ -104,7 +126,9 @@ export function GameScreen({ game }: { readonly game: Game }) {
           <Board
             label="Your waters"
             caption="AI shots land here"
+            side="friendly"
             variantAt={ownVariant}
+            ships={visibleShips(ownBoard, 'all')}
             animationAt={(at) => animationFor(last, 'ai', at)}
           />
           <FleetStatus label="Your fleet" board={ownBoard} revealAfloat />

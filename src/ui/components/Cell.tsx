@@ -7,14 +7,20 @@ export type CellVariant =
 /** Which state change, if any, this cell should animate on this render. */
 export type CellAnimation = 'miss' | 'hit' | 'sunk' | null;
 
+/*
+ * Cells that sit over a ship silhouette are deliberately translucent so the drawing below stays
+ * readable; resolved states (miss / hit / sunk) stay opaque enough to dominate it.
+ */
 const VARIANT_CLASS: Readonly<Record<CellVariant, string>> = {
-  water: 'bg-sea-800 border-sea-700 text-sea-600',
-  ship: 'bg-slate-300 border-slate-100 text-slate-700',
-  previewValid: 'bg-emerald-400 border-emerald-200 text-emerald-950',
-  previewInvalid: 'bg-rose-500 border-rose-200 text-rose-50',
-  miss: 'bg-sea-700 border-sea-600 text-slate-300',
-  hit: 'bg-amber-400 border-amber-200 text-amber-950',
-  sunk: 'cell-hatched bg-rose-800 border-rose-400 text-rose-50',
+  water: 'bg-sea-800/55 border-sea-700/50 text-sea-600',
+  // Nothing of its own: the ship drawn underneath is what the player should see.
+  ship: 'border-transparent text-slate-700',
+  previewValid: 'bg-emerald-400/12 border-emerald-300/50 text-emerald-100',
+  previewInvalid: 'bg-rose-500/18 border-rose-300/60 text-rose-50',
+  miss: 'bg-sea-700/85 border-sea-600 text-slate-200',
+  hit: 'cell-plating bg-amber-400/70 border-amber-200 text-amber-950',
+  // Translucent so the wreck drawn underneath stays visible through the hatching.
+  sunk: 'cell-hatched bg-rose-800/45 border-rose-400 text-rose-50',
 };
 
 /**
@@ -136,7 +142,9 @@ export function Cell({
       className={`flex aspect-square items-center justify-center rounded-[0.2rem] border transition-[filter,background-color] duration-150 ${
         VARIANT_CLASS[variant]
       } ${animation ? ANIMATION_CLASS[animation] : ''} ${
-        interactive ? 'cursor-pointer hover:brightness-125' : 'cursor-default'
+        interactive
+          ? 'cursor-pointer hover:brightness-125 hover:ring-1 hover:ring-sky-300/70 hover:ring-inset'
+          : 'cursor-default'
       }`}
     >
       <CellMark variant={variant} />

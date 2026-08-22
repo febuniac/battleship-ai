@@ -5,6 +5,7 @@ import type { Coord, Orientation, ShipId } from '../engine/types.ts';
 import { Board } from './components/Board.tsx';
 import type { CellVariant } from './components/Cell.tsx';
 import { LiveRegion } from './components/LiveRegion.tsx';
+import type { ShipVisual } from './components/ShipLayer.tsx';
 import { ShipTray } from './components/ShipTray.tsx';
 import { ValidationHint } from './components/ValidationHint.tsx';
 import { placementReasonText } from './messages.ts';
@@ -50,6 +51,9 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
     return {
       keys: new Set(cells.map((cell) => coordKey(cell))),
       reason,
+      shipId: activeShip,
+      origin: hover,
+      orientation,
       text:
         reason === null
           ? `${shipSpec(activeShip).name} fits here`
@@ -63,6 +67,29 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
     }
     return shipAt(board, at) ? 'ship' : 'water';
   };
+
+  /*
+   * Placed ships plus, when hovering, a ghost of the ship being placed. An out-of-bounds ghost is
+   * skipped: only the cells' negative state can show a footprint that leaves the board.
+   */
+  const ships: readonly ShipVisual[] = [
+    ...board.ships.map((ship): ShipVisual => ({
+      shipId: ship.id,
+      origin: ship.origin,
+      orientation: ship.orientation,
+      tone: 'fleet',
+    })),
+    ...(preview && preview.reason !== 'OUT_OF_BOUNDS'
+      ? [
+          {
+            shipId: preview.shipId,
+            origin: preview.origin,
+            orientation: preview.orientation,
+            tone: preview.reason === null ? ('ghost' as const) : ('invalid' as const),
+          },
+        ]
+      : []),
+  ];
 
   const onCellSelect = (at: Coord) => {
     const existing = shipAt(board, at);
@@ -125,7 +152,9 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
           <Board
             label="Your waters"
             caption="Click a cell to place the selected ship"
+            side="friendly"
             variantAt={variantAt}
+            ships={ships}
             onSelect={onCellSelect}
             onHover={setHover}
             {...(autoFocusBoard ? { focusKey: game.generation } : {})}

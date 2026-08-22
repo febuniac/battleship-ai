@@ -32,6 +32,12 @@ function ownCell(at: Coord): HTMLElement {
   return cellIn('Your waters', at);
 }
 
+/** Decorative ship silhouettes drawn on a board, optionally filtered to one ship. */
+function sprites(boardLabel: string, shipId?: string): SVGElement[] {
+  const board = screen.getByRole('region', { name: boardLabel });
+  return [...board.querySelectorAll<SVGElement>(`[data-ship${shipId ? `="${shipId}"` : ''}]`)];
+}
+
 function banner(): string {
   return screen.getByTestId('turn-banner').textContent ?? '';
 }
@@ -158,6 +164,55 @@ describe('Battleship app', () => {
       await startGame(user);
       expect(screen.getByRole('region', { name: 'Enemy waters' })).toBeDefined();
       expect(banner()).toBe(YOUR_TURN);
+    });
+  });
+
+  describe('ship visuals', () => {
+    it('draws one silhouette per placed ship, spanning its cells', async () => {
+      await user.click(ownCell({ r: 0, c: 0 }));
+
+      const [carrier] = sprites('Your waters', 'carrier');
+      expect(carrier?.getAttribute('viewBox')).toBe('0 0 100 20');
+      // The drawing is decorative: the cells remain the only announced, interactive layer.
+      expect(carrier?.getAttribute('aria-hidden')).toBe('true');
+      expect(carrier?.parentElement?.style.gridColumn).toBe('1 / span 5');
+      expect(carrier?.parentElement?.style.gridRow).toBe('1');
+    });
+
+    it('turns the silhouette itself when the orientation changes', async () => {
+      await user.keyboard('r');
+      await user.click(ownCell({ r: 0, c: 0 }));
+
+      const [carrier] = sprites('Your waters', 'carrier');
+      expect(carrier?.getAttribute('viewBox')).toBe('0 0 20 100');
+      expect(carrier?.parentElement?.style.gridRow).toBe('1 / span 5');
+    });
+
+    it('ghosts a valid preview and marks a rejected one', async () => {
+      await user.hover(ownCell({ r: 4, c: 0 }));
+      expect(sprites('Your waters', 'carrier')[0]?.classList.contains('ship-tone-ghost')).toBe(
+        true,
+      );
+
+      await user.click(ownCell({ r: 4, c: 0 }));
+      await user.hover(ownCell({ r: 4, c: 2 }));
+      const overlapping = sprites('Your waters', 'battleship')[0];
+      expect(overlapping?.classList.contains('ship-tone-invalid')).toBe(true);
+    });
+
+    it('draws no enemy silhouette until a ship is sunk', async () => {
+      await startGame(user);
+      expect(sprites('Enemy waters')).toHaveLength(0);
+
+      const carrier = aiBoard.ships.find((ship) => ship.id === 'carrier');
+      for (const cell of carrier?.cells ?? []) {
+        await user.click(enemyCell(cell));
+      }
+
+      const revealed = sprites('Enemy waters');
+      expect(revealed).toHaveLength(1);
+      expect(revealed[0]?.dataset.ship).toBe('carrier');
+      expect(revealed[0]?.classList.contains('ship-tone-wreck')).toBe(true);
     });
   });
 

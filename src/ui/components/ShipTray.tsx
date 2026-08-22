@@ -1,6 +1,7 @@
 import { findShip } from '../../engine/board.ts';
 import { FLEET } from '../../engine/rules.ts';
 import type { Board, ShipId } from '../../engine/types.ts';
+import { ShipSprite } from './ShipSprite.tsx';
 
 export interface ShipTrayProps {
   readonly board: Board;
@@ -9,7 +10,13 @@ export interface ShipTrayProps {
   readonly onRemove: (shipId: ShipId) => void;
 }
 
+/**
+ * The fleet roster. Each row shows the same silhouette that will appear on the board, at a width
+ * proportional to the ship's length, so the tray and the board are obviously the same objects.
+ */
 export function ShipTray({ board, selected, onSelect, onRemove }: ShipTrayProps) {
+  const longest = Math.max(...FLEET.map((spec) => spec.size));
+
   return (
     <ul aria-label="Fleet" className="flex flex-col gap-1.5">
       {FLEET.map((spec) => {
@@ -19,11 +26,13 @@ export function ShipTray({ board, selected, onSelect, onRemove }: ShipTrayProps)
         return (
           <li key={spec.id}>
             <div
+              data-ship-row={spec.id}
+              data-placed={placed}
               className={`flex items-stretch gap-2 rounded-md border transition-colors ${
                 isSelected
-                  ? 'border-sky-400 bg-sky-500/10'
+                  ? 'border-sky-400 bg-sky-500/10 ring-1 ring-sky-400/40'
                   : placed
-                    ? 'border-sea-700 bg-emerald-500/5'
+                    ? 'border-emerald-500/40 bg-emerald-500/5'
                     : 'border-sea-700 bg-sea-800/60'
               }`}
             >
@@ -31,23 +40,29 @@ export function ShipTray({ board, selected, onSelect, onRemove }: ShipTrayProps)
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => onSelect(spec.id)}
-                className="flex min-h-11 flex-1 items-center gap-3 px-3 text-left"
+                className="flex min-h-11 flex-1 items-center gap-3 px-3 py-1.5 text-left"
               >
-                <span className="flex-1 text-sm font-medium text-slate-100">{spec.name}</span>
-                <span aria-hidden className="flex gap-0.5">
-                  {Array.from({ length: spec.size }, (_unused, index) => (
-                    <span
-                      key={index}
-                      className={`h-2.5 w-2.5 rounded-[0.15rem] ${
-                        placed ? 'bg-emerald-400' : 'bg-sea-600'
-                      }`}
-                    />
-                  ))}
+                <span className="flex w-24 shrink-0 flex-col">
+                  <span className="text-sm font-medium text-slate-100">{spec.name}</span>
+                  <span className="text-[0.65rem] tracking-wide text-slate-400 uppercase">
+                    {spec.size} cells
+                  </span>
                 </span>
+
+                {/* Proportional width: the Destroyer is visibly a smaller vessel than the Carrier. */}
+                <span aria-hidden className="flex min-w-0 flex-1 items-center">
+                  <ShipSprite
+                    shipId={spec.id}
+                    tone={placed ? 'fleet' : 'ghost'}
+                    className={`h-7 ${placed ? '' : 'opacity-80'}`}
+                    style={{ width: `${(spec.size / longest) * 100}%` }}
+                  />
+                </span>
+
                 <span
-                  className={`w-14 text-right text-xs ${placed ? 'text-emerald-300' : 'text-slate-400'}`}
+                  className={`w-14 shrink-0 text-right text-xs ${placed ? 'text-emerald-300' : 'text-slate-400'}`}
                 >
-                  {placed ? 'Placed' : `${spec.size} cells`}
+                  {placed ? 'Placed' : isSelected ? 'Placing…' : 'Ready'}
                 </span>
               </button>
 
