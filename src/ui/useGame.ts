@@ -46,7 +46,7 @@ export interface Game {
  * How long the AI appears to think before each of its shots. Long enough that the result of the
  * player's own shot registers and the turn change is noticed, short enough not to feel sluggish.
  */
-const AI_THINKING_MS = 1150;
+const AI_THINKING_MS = 1500;
 
 /** New games get a random seed; the engine itself never touches `Math.random`. */
 function freshSeed(): number {

@@ -26,6 +26,22 @@ function enemyCell(page: Page, at: Coord): Locator {
   return cell(page, 'Enemy waters', at);
 }
 
+async function boxOf(locator: Locator): Promise<{ y: number; height: number }> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error('expected the element to be laid out');
+  return box;
+}
+
+/** The contextual line belongs inside the water, above the grid it explains. */
+async function expectHudInsideBoard(page: Page, board: string, side: string): Promise<void> {
+  const region = page.getByRole('region', { name: board });
+  const hud = await boxOf(page.getByTestId(`board-hud-${side}`));
+  const ocean = await boxOf(region.locator('.ocean'));
+  const firstCell = await boxOf(region.locator('[data-coord="A1"]'));
+  expect(hud.y).toBeGreaterThanOrEqual(ocean.y - 1);
+  expect(hud.y + hud.height).toBeLessThanOrEqual(firstCell.y + 1);
+}
+
 async function startBattle(page: Page): Promise<void> {
   await page.goto(URL);
   // The opening screen comes first; placement is one click away.
@@ -45,6 +61,12 @@ async function startBattle(page: Page): Promise<void> {
 
   await expect(page.getByRole('heading', { name: 'Deploy your fleet' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Begin battle' })).toBeDisabled();
+  // Away from the water, so the board asks for the first move rather than previewing one.
+  await page.mouse.move(0, 0);
+  await expect(page.getByTestId('board-hud-friendly')).toHaveText(
+    'Select your ships and place them on your board.',
+  );
+  await expectHudInsideBoard(page, 'Your waters', 'friendly');
 
   await page.getByRole('button', { name: 'Randomize fleet' }).click();
   await expect(page.getByRole('button', { name: 'Begin battle' })).toBeEnabled();
@@ -52,6 +74,8 @@ async function startBattle(page: Page): Promise<void> {
 
   await expect(page.getByRole('region', { name: 'Enemy waters' })).toBeVisible();
   await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
+  await expect(page.getByTestId('board-hud-enemy')).toHaveText('Select where to attack.');
+  await expectHudInsideBoard(page, 'Enemy waters', 'enemy');
 }
 
 test('plays a seeded game from placement through victory back to a clean board', async ({
@@ -69,6 +93,8 @@ test('plays a seeded game from placement through victory back to a clean board',
 
   // A hit keeps the turn with the player.
   const firstHit = shipCells[0] as Coord;
+  await enemyCell(page, firstHit).hover();
+  await expect(page.getByTestId('board-hud-enemy')).toHaveText(`Fire at ${coordLabel(firstHit)}`);
   await enemyCell(page, firstHit).click();
   await expect(enemyCell(page, firstHit)).toHaveAttribute('data-state', /hit|sunk/);
   await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
@@ -111,6 +137,9 @@ test('plays a seeded game from placement through victory back to a clean board',
   for (const at of shipCells.slice(1)) {
     await enemyCell(page, at).click();
   }
+
+  // The winning shot names the vessel it destroyed instead of reverting to an instruction.
+  await expect(page.getByTestId('board-hud-enemy')).toHaveText(/ SUNK$/);
 
   const dialog = page.getByRole('dialog', { name: 'Game over' });
   await expect(dialog.getByRole('heading', { name: 'You win' })).toBeVisible();

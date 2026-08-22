@@ -118,6 +118,8 @@ export interface CellProps {
   readonly animation?: CellAnimation;
   readonly onSelect?: (at: Coord) => void;
   readonly onHover?: (at: Coord | null) => void;
+  /** Whether arriving by keyboard counts as hovering. Placement previews want it; targeting does not. */
+  readonly hoverOnFocus?: boolean;
   readonly onFocusCell?: (at: Coord) => void;
 }
 
@@ -129,6 +131,7 @@ export function Cell({
   animation = null,
   onSelect,
   onHover,
+  hoverOnFocus = true,
   onFocusCell,
 }: CellProps) {
   const interactive = !disabled && onSelect !== undefined;
@@ -146,7 +149,7 @@ export function Cell({
       onMouseLeave={onHover ? () => onHover(null) : undefined}
       onFocus={() => {
         onFocusCell?.(at);
-        onHover?.(at);
+        if (hoverOnFocus) onHover?.(at);
       }}
       /* `relative` gives the miss and hit animations their spray and ripple pseudo-elements. */
       className={`relative flex aspect-square items-center justify-center transition-colors duration-150 ${

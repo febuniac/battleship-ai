@@ -3,6 +3,7 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { allCoords, coordLabel, shipAt } from '../engine/board.ts';
 import { applyAction, createInitialState } from '../engine/reducer.ts';
+import { shipSpec } from '../engine/rules.ts';
 import type { Coord } from '../engine/types.ts';
 import { App } from './App.tsx';
 
@@ -96,6 +97,13 @@ function aiShotCount(): number {
   ).length;
 }
 
+/** Let a landed result finish its beat on the board, so the boards go back to narrating the turn. */
+async function settleResult(): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_000);
+  });
+}
+
 /** Let exactly one paced AI shot resolve. */
 async function aiTick(): Promise<void> {
   await act(async () => {
@@ -132,10 +140,44 @@ describe('Battleship app', () => {
     });
 
     it('tells a first-time player what to do and what the fleet numbers mean', () => {
-      expect(screen.getByText('Select your ships and place them on your board.')).toBeDefined();
+      expect(screen.getByTestId('board-hud-friendly').textContent).toBe(
+        'Select your ships and place them on your board.',
+      );
       const tray = screen.getByRole('list', { name: 'Fleet' });
       expect(tray.textContent).toContain('5 cells');
       expect(tray.textContent).toContain('2 cells');
+    });
+
+    it('narrates placement inside the board, from selection to a ready fleet', async () => {
+      const hud = () => screen.getByTestId('board-hud-friendly');
+
+      await user.click(trayRow('battleship'));
+      expect(hud().textContent).toBe('Place your Battleship.');
+
+      await user.hover(ownCell({ r: 4, c: 0 }));
+      expect(hud().textContent).toBe('Place Battleship here.');
+      expect(hud().dataset.tone).toBe('valid');
+
+      await user.hover(ownCell({ r: 4, c: 8 }));
+      expect(hud().textContent).toBe('That position is unavailable.');
+      expect(hud().dataset.tone).toBe('invalid');
+
+      await user.click(ownCell({ r: 4, c: 0 }));
+      await user.unhover(ownCell({ r: 4, c: 0 }));
+      expect(hud().textContent).toBe('Battleship placed. Select your next ship.');
+
+      await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
+      expect(hud().textContent).toBe('Fleet ready. Begin battle.');
+    });
+
+    it('keeps the board instruction inside the water, above the grid', () => {
+      const water = screen.getByRole('region', { name: 'Your waters' }).querySelector('.ocean');
+      const hud = screen.getByTestId('board-hud-friendly');
+      expect(water?.contains(hud)).toBe(true);
+      // The grid follows the instruction rather than sitting under it.
+      expect(hud.compareDocumentPosition(ownCell({ r: 0, c: 0 }))).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
     });
 
     it('reports the engine reason when a placement would leave the board', async () => {
@@ -340,11 +382,40 @@ describe('Battleship app', () => {
     });
 
     it('points a first-time player at the enemy board', () => {
-      const enemy = screen.getByRole('region', { name: 'Enemy waters' });
-      expect(enemy.textContent).toContain('Select a position to attack.');
-      expect(
-        screen.getByRole('region', { name: 'Your waters' }).textContent?.includes('to attack'),
-      ).toBe(false);
+      expect(screen.getByTestId('board-hud-enemy').textContent).toBe('Select where to attack.');
+      expect(screen.getByTestId('board-hud-friendly').textContent).toBe('The AI fires here.');
+    });
+
+    it('names the square under the cursor, then what the shot did', async () => {
+      const hud = () => screen.getByTestId('board-hud-enemy');
+      const water = aiWaterCells[0] as Coord;
+
+      await user.hover(enemyCell(water));
+      expect(hud().textContent).toBe(`Fire at ${coordLabel(water)}`);
+
+      await user.click(enemyCell(water));
+      expect(hud().textContent).toBe('MISS');
+
+      // The result has its own beat; then the locked board explains the wait.
+      await settleResult();
+      expect(hud().textContent).toBe('AI is thinking…');
+      expect(screen.getByTestId('board-hud-friendly').textContent).toBe('AI is thinking…');
+    });
+
+    it('names an enemy ship only once it goes down', async () => {
+      const hud = () => screen.getByTestId('board-hud-enemy');
+      const ship = shipAt(aiBoard, aiShipCells[0] as Coord);
+      if (ship === undefined) throw new Error('expected a ship on the seeded enemy board');
+
+      for (const [index, cell] of ship.cells.entries()) {
+        await user.click(enemyCell(cell));
+        await user.unhover(enemyCell(cell));
+        const afloat = index < ship.cells.length - 1;
+        expect(hud().textContent).toBe(
+          afloat ? 'HIT' : `${shipSpec(ship.id).name.toUpperCase()} SUNK`,
+        );
+        expect(hud().dataset.tone).toBe('impact');
+      }
     });
 
     it('names the outcome of a shot without naming an enemy ship still afloat', async () => {
@@ -387,8 +458,8 @@ describe('Battleship app', () => {
       expect(banner()).toContain('AI is thinking');
       expect([water('Enemy waters'), water('Your waters')]).toEqual(['idle', 'active']);
       // The board that cannot be fired at stops asking for a target.
-      expect(screen.queryByText('Select a position to attack.')).toBeNull();
-      expect(screen.getByText('Wait for the AI to fire.')).toBeDefined();
+      await settleResult();
+      expect(screen.getByTestId('board-hud-enemy').textContent).toBe('AI is thinking…');
     });
 
     it('moves focus into the enemy grid when the battle starts', () => {
@@ -523,8 +594,9 @@ describe('Battleship app', () => {
         within(dialog).getByRole('button', { name: 'Play again' }),
       );
       expect(isLocked(enemyCell(aiWaterCells[0] as Coord))).toBe(true);
-      // The board is no longer actionable, so it stops asking for a target.
-      expect(screen.queryByText('Select a position to attack.')).toBeNull();
+      // The board is no longer actionable: it names the vessel that ended the game instead.
+      expect(screen.getByTestId('board-hud-enemy').textContent).toMatch(/ SUNK$|^Game over\.$/);
+      expect(screen.queryByText('Select where to attack.')).toBeNull();
 
       await user.click(within(dialog).getByRole('button', { name: 'Play again' }));
 

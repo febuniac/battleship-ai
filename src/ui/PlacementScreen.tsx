@@ -3,7 +3,7 @@ import { coordKey, coordLabel, findShip, shipAt, shipFootprint } from '../engine
 import { FLEET, shipSpec } from '../engine/rules.ts';
 import type { Coord, Orientation, ShipId } from '../engine/types.ts';
 import { AppHeader } from './components/AppHeader.tsx';
-import { Board } from './components/Board.tsx';
+import { Board, type BoardHud } from './components/Board.tsx';
 import type { CellVariant } from './components/Cell.tsx';
 import { LiveRegion } from './components/LiveRegion.tsx';
 import type { ShipVisual } from './components/ShipLayer.tsx';
@@ -27,6 +27,14 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
   const [orientation, setOrientation] = useState<Orientation>('horizontal');
   const [hover, setHover] = useState<Coord | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  /**
+   * The last thing the player did to their fleet, so the board can answer it: a ship taken from
+   * the tray gets an instruction, a ship that just landed gets a confirmation.
+   */
+  const [lastAction, setLastAction] = useState<{
+    readonly kind: 'selected' | 'placed';
+    readonly ship: ShipId;
+  } | null>(null);
 
   const fleetComplete = board.ships.length === FLEET.length;
   const activeShip = selected !== null && findShip(board, selected) === undefined ? selected : null;
@@ -106,6 +114,7 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
       game.remove(existing.id);
       setSelected(existing.id);
       setOrientation(existing.orientation);
+      setLastAction({ kind: 'selected', ship: existing.id });
       setAnnouncement(`${shipSpec(existing.id).name} removed`);
       return;
     }
@@ -122,12 +131,32 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
     }
 
     setAnnouncement(`${shipSpec(activeShip).name} placed at ${coordLabel(at)}, ${orientation}`);
+    setLastAction({ kind: 'placed', ship: activeShip });
     // `board` predates this placement, so the ship just placed is excluded explicitly.
     const next = FLEET.find(
       (spec) => spec.id !== activeShip && findShip(board, spec.id) === undefined,
     );
     setSelected(next?.id ?? null);
   };
+
+  /*
+   * The board's own instruction, following the player: what to do, whether this spot works, and
+   * what just landed. One line in one place, so there is never a second thing to read.
+   */
+  const hud: BoardHud = preview
+    ? preview.reason === null
+      ? { tone: 'valid', text: `Place ${shipSpec(preview.shipId).name} here.` }
+      : { tone: 'invalid', text: 'That position is unavailable.' }
+    : fleetComplete
+      ? { tone: 'valid', text: 'Fleet ready. Begin battle.' }
+      : lastAction?.kind === 'placed'
+        ? {
+            tone: 'valid',
+            text: `${shipSpec(lastAction.ship).name} placed. Select your next ship.`,
+          }
+        : lastAction?.kind === 'selected' && activeShip !== null
+          ? { tone: 'neutral', text: `Place your ${shipSpec(activeShip).name}.` }
+          : { tone: 'neutral', text: 'Select your ships and place them on your board.' };
 
   const status = preview
     ? {
@@ -154,16 +183,22 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
       </AppHeader>
 
       <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-14">
-        <Board
-          label="Your waters"
-          hint="Select your ships and place them on your board."
-          side="friendly"
-          variantAt={variantAt}
-          ships={ships}
-          onSelect={onCellSelect}
-          onHover={setHover}
-          {...(autoFocusBoard ? { focusKey: game.generation } : {})}
-        />
+        {/*
+         * On the wide layout the board is the only thing above the fold, so its width is bounded
+         * by the height left for it: the tenth row stays visible instead of falling off-screen.
+         */}
+        <div className="w-full lg:[max-width:min(100%,calc(100svh-19rem))]">
+          <Board
+            label="Your waters"
+            hud={hud}
+            side="friendly"
+            variantAt={variantAt}
+            ships={ships}
+            onSelect={onCellSelect}
+            onHover={setHover}
+            {...(autoFocusBoard ? { focusKey: game.generation } : {})}
+          />
+        </div>
 
         <div className="flex flex-col gap-6">
           <ShipTray
@@ -176,6 +211,7 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
                 setOrientation(placed.orientation);
               }
               setSelected(shipId);
+              setLastAction({ kind: 'selected', ship: shipId });
               setAnnouncement(`${shipSpec(shipId).name} selected`);
             }}
           />
@@ -190,6 +226,7 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
                 onClick={() => {
                   game.randomize();
                   setSelected(null);
+                  setLastAction(null);
                   setAnnouncement('Fleet placed at random');
                 }}
                 className={CONTROL}
@@ -201,6 +238,7 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
                 onClick={() => {
                   game.clearFleet();
                   setSelected(FLEET[0]?.id ?? null);
+                  setLastAction(null);
                   setAnnouncement('Board cleared');
                 }}
                 className={CONTROL}

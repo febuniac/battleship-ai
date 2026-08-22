@@ -46,13 +46,27 @@ const SIDE_CLASS = {
   friendly: 'ring-1 ring-inset ring-white/70 saturate-[0.82] brightness-[1.03]',
 } as const;
 
+/** The HUD's four voices: stating, confirming, refusing, reporting damage. */
+const HUD_TONE = {
+  neutral: 'text-ink-soft',
+  valid: 'text-ink',
+  invalid: 'text-impact',
+  impact: 'text-impact',
+} as const;
+
+export interface BoardHud {
+  readonly text: string;
+  readonly tone: keyof typeof HUD_TONE;
+}
+
 export interface BoardProps {
   readonly label: string;
   readonly caption?: string;
-  /** A quiet line under the board's title telling a first-time player what to do here. */
-  readonly hint?: string;
-  /** Holds the hint line's space open so a hintless board's grid stays level with its sibling. */
-  readonly hintSpacer?: boolean;
+  /**
+   * The board's own status bar, drawn inside the water above the grid: what to do here, or what
+   * just happened here. Its height is reserved, so the message can change without moving the grid.
+   */
+  readonly hud?: BoardHud;
   readonly side: keyof typeof SIDE_CLASS;
   /** Which water the player should be looking at: the one they can act on, or the one they wait on. */
   readonly emphasis?: 'active' | 'idle';
@@ -65,6 +79,8 @@ export interface BoardProps {
   readonly ships?: readonly ShipVisual[];
   readonly onSelect?: (at: Coord) => void;
   readonly onHover?: (at: Coord | null) => void;
+  /** Whether moving keyboard focus counts as hovering a cell. Defaults to yes. */
+  readonly hoverOnFocus?: boolean;
   readonly cellDisabled?: (at: Coord) => boolean;
   readonly disabled?: boolean;
   /**
@@ -78,14 +94,13 @@ export interface BoardProps {
  * A 10x10 grid of cells with a single tab stop (roving `tabindex`), so reaching the board and
  * moving around inside it are separate steps for keyboard users instead of 100 tab presses.
  *
- * Coordinate labels sit outside the water, which lets the ship layer share the exact grid
- * geometry of the cells.
+ * The HUD and the coordinate labels are drawn on the water; the ship layer is scoped to the cell
+ * grid itself, so hulls share the exact geometry of the cells they occupy.
  */
 export function Board({
   label,
   caption,
-  hint,
-  hintSpacer = false,
+  hud,
   side,
   emphasis,
   variantAt,
@@ -93,6 +108,7 @@ export function Board({
   ships,
   onSelect,
   onHover,
+  hoverOnFocus = true,
   cellDisabled,
   disabled = false,
   focusKey,
@@ -130,65 +146,81 @@ export function Board({
         {caption ? <p className="text-xs text-ink-faint">{caption}</p> : null}
       </header>
 
-      {hint !== undefined || hintSpacer ? (
-        <p aria-hidden={hint === undefined} className="-mt-1 px-0.5 text-xs text-ink-faint">
-          {hint ?? '\u00a0'}
-        </p>
-      ) : null}
+      {/*
+       * The water carries its own instructions. The HUD sits on the surface at the top and the
+       * coordinates sit just below it, so everything a player needs to read is part of the board
+       * rather than another element floating beside it.
+       */}
+      <div
+        data-emphasis={emphasis}
+        className={`ocean relative overflow-hidden rounded-xl sm:rounded-2xl ${SIDE_CLASS[side]} ${
+          emphasis === undefined ? '' : `ocean-${emphasis}`
+        }`}
+      >
+        {hud ? (
+          <p
+            data-testid={`board-hud-${side}`}
+            data-tone={hud.tone}
+            className={`board-hud flex min-h-10 items-center px-3 text-[0.74rem] leading-snug font-medium sm:text-[0.8rem] ${
+              HUD_TONE[hud.tone]
+            }`}
+          >
+            {hud.text}
+          </p>
+        ) : null}
 
-      <div className="grid grid-cols-[0.9rem_minmax(0,1fr)] items-center gap-x-1.5 sm:gap-x-2">
-        <div aria-hidden />
-        <div
-          aria-hidden
-          className="grid grid-cols-10 pb-1.5 text-center text-[0.6rem] font-medium tracking-[0.1em] text-ink-faint"
-        >
-          {COLUMN_LABELS.map((column) => (
-            <div key={column}>{column}</div>
-          ))}
-        </div>
-
-        <div
-          aria-hidden
-          className="grid grid-rows-10 self-stretch pr-0.5 text-[0.6rem] font-medium text-ink-faint tabular-nums"
-        >
-          {ROWS.map((row) => (
-            <div key={row} className="flex items-center justify-end">
-              {row + 1}
-            </div>
-          ))}
-        </div>
-
-        {/*
-         * Plain grid of buttons rather than ARIA `grid` semantics: each cell already announces
-         * its coordinate and state, and native buttons keep Enter/Space working everywhere.
-         * The hairline grid is painted by the water itself, so the cells add no borders of their
-         * own and a hull can span them without interruption.
-         */}
-        <div
-          ref={gridRef}
-          onKeyDown={onKeyDown}
-          data-emphasis={emphasis}
-          className={`ocean ocean-grid relative overflow-hidden rounded-xl sm:rounded-2xl ${
-            SIDE_CLASS[side]
-          } ${emphasis === undefined ? '' : `ocean-${emphasis}`}`}
-        >
-          <ShipLayer ships={afloat} />
-          <div className="relative grid grid-cols-10">
-            {CELLS.map((at) => (
-              <Cell
-                key={coordLabel(at)}
-                at={at}
-                variant={variantAt(at)}
-                animation={animationAt?.(at) ?? null}
-                disabled={disabled || cellDisabled?.(at) === true}
-                tabIndex={at.r === cursor.r && at.c === cursor.c ? 0 : -1}
-                onFocusCell={setCursor}
-                {...(onSelect ? { onSelect } : {})}
-                {...(onHover ? { onHover } : {})}
-              />
+        <div className="grid grid-cols-[0.9rem_minmax(0,1fr)] items-center gap-x-1 p-1.5 sm:gap-x-1.5">
+          <div aria-hidden />
+          <div
+            aria-hidden
+            className="grid grid-cols-10 pb-1 text-center text-[0.6rem] font-medium tracking-[0.1em] text-ink-soft"
+          >
+            {COLUMN_LABELS.map((column) => (
+              <div key={column}>{column}</div>
             ))}
           </div>
-          <ShipLayer ships={wrecks} />
+
+          <div
+            aria-hidden
+            className="grid grid-rows-10 self-stretch pr-0.5 text-[0.6rem] font-medium text-ink-soft tabular-nums"
+          >
+            {ROWS.map((row) => (
+              <div key={row} className="flex items-center justify-end">
+                {row + 1}
+              </div>
+            ))}
+          </div>
+
+          {/*
+           * Plain grid of buttons rather than ARIA `grid` semantics: each cell already announces
+           * its coordinate and state, and native buttons keep Enter/Space working everywhere.
+           * The hairline grid is painted behind the cells, so they add no borders of their own
+           * and a hull can span them without interruption.
+           */}
+          <div
+            ref={gridRef}
+            onKeyDown={onKeyDown}
+            className="ocean-grid relative overflow-hidden rounded-md"
+          >
+            <ShipLayer ships={afloat} />
+            <div className="relative grid grid-cols-10">
+              {CELLS.map((at) => (
+                <Cell
+                  key={coordLabel(at)}
+                  at={at}
+                  variant={variantAt(at)}
+                  animation={animationAt?.(at) ?? null}
+                  disabled={disabled || cellDisabled?.(at) === true}
+                  tabIndex={at.r === cursor.r && at.c === cursor.c ? 0 : -1}
+                  onFocusCell={setCursor}
+                  hoverOnFocus={hoverOnFocus}
+                  {...(onSelect ? { onSelect } : {})}
+                  {...(onHover ? { onHover } : {})}
+                />
+              ))}
+            </div>
+            <ShipLayer ships={wrecks} />
+          </div>
         </div>
       </div>
     </section>
