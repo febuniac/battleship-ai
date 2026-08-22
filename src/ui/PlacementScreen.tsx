@@ -156,6 +156,7 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
       <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-14">
         <Board
           label="Your waters"
+          hint="Select your ships and place them on your board."
           side="friendly"
           variantAt={variantAt}
           ships={ships}

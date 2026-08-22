@@ -118,6 +118,7 @@ export function GameScreen({ game }: { readonly game: Game }) {
         <Board
           label="Enemy waters"
           {...(enemyCaption === undefined ? {} : { caption: enemyCaption })}
+          {...(state.phase === 'playing' ? { hint: 'Select a position to attack.' } : {})}
           side="enemy"
           variantAt={enemyVariant}
           // Only sunk enemy hulls are drawn; an unhit ship is indistinguishable from open water.
@@ -136,6 +137,7 @@ export function GameScreen({ game }: { readonly game: Game }) {
         <Board
           label="Your waters"
           {...(ownCaption === undefined ? {} : { caption: ownCaption })}
+          hintSpacer={state.phase === 'playing'}
           side="friendly"
           variantAt={ownVariant}
           ships={visibleShips(ownBoard, 'all')}

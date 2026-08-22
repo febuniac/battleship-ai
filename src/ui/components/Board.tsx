@@ -49,6 +49,10 @@ const SIDE_CLASS = {
 export interface BoardProps {
   readonly label: string;
   readonly caption?: string;
+  /** A quiet line under the board's title telling a first-time player what to do here. */
+  readonly hint?: string;
+  /** Holds the hint line's space open so a hintless board's grid stays level with its sibling. */
+  readonly hintSpacer?: boolean;
   readonly side: keyof typeof SIDE_CLASS;
   readonly variantAt: (at: Coord) => CellVariant;
   readonly animationAt?: (at: Coord) => CellAnimation;
@@ -78,6 +82,8 @@ export interface BoardProps {
 export function Board({
   label,
   caption,
+  hint,
+  hintSpacer = false,
   side,
   variantAt,
   animationAt,
@@ -120,6 +126,12 @@ export function Board({
         </h2>
         {caption ? <p className="text-xs text-ink-faint">{caption}</p> : null}
       </header>
+
+      {hint !== undefined || hintSpacer ? (
+        <p aria-hidden={hint === undefined} className="-mt-1 px-0.5 text-xs text-ink-faint">
+          {hint ?? '\u00a0'}
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-[0.9rem_minmax(0,1fr)] items-center gap-x-1.5 sm:gap-x-2">
         <div aria-hidden />

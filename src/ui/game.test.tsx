@@ -131,6 +131,13 @@ describe('Battleship app', () => {
       expect(placedShips()).toHaveLength(0);
     });
 
+    it('tells a first-time player what to do and what the fleet numbers mean', () => {
+      expect(screen.getByText('Select your ships and place them on your board.')).toBeDefined();
+      const tray = screen.getByRole('list', { name: 'Fleet' });
+      expect(tray.textContent).toContain('5 cells');
+      expect(tray.textContent).toContain('2 cells');
+    });
+
     it('reports the engine reason when a placement would leave the board', async () => {
       await user.hover(ownCell({ r: 0, c: 7 }));
       expect(status()).toContain('Ship would extend off the board');
@@ -332,6 +339,14 @@ describe('Battleship app', () => {
       expect(within(board).getAllByRole('button', { name: /, unknown$/ })).toHaveLength(100);
     });
 
+    it('points a first-time player at the enemy board', () => {
+      const enemy = screen.getByRole('region', { name: 'Enemy waters' });
+      expect(enemy.textContent).toContain('Select a position to attack.');
+      expect(
+        screen.getByRole('region', { name: 'Your waters' }).textContent?.includes('to attack'),
+      ).toBe(false);
+    });
+
     it('moves focus into the enemy grid when the battle starts', () => {
       expect(document.activeElement).toBe(enemyCell({ r: 0, c: 0 }));
     });
@@ -464,6 +479,8 @@ describe('Battleship app', () => {
         within(dialog).getByRole('button', { name: 'Play again' }),
       );
       expect(isLocked(enemyCell(aiWaterCells[0] as Coord))).toBe(true);
+      // The board is no longer actionable, so it stops asking for a target.
+      expect(screen.queryByText('Select a position to attack.')).toBeNull();
 
       await user.click(within(dialog).getByRole('button', { name: 'Play again' }));
 
