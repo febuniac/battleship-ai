@@ -148,8 +148,8 @@ function Carrier(length: number) {
 function Battleship(length: number) {
   return (
     <>
-      <Hull d={hull(length, 4.6, 15.4, 11)} />
-      <Deck from={4} to={length - 11} top={6.4} bottom={13.6} />
+      <Hull d={hull(length, 3.4, 16.6, 11)} />
+      <Deck from={4} to={length - 11} top={5.6} bottom={14.4} />
       <Turret x={length * 0.16} radius={2.3} />
       <Turret x={length * 0.66} radius={2.3} />
       <Block x={length * 0.36} width={length * 0.12} height={8} />
@@ -162,42 +162,49 @@ function Battleship(length: number) {
 function Cruiser(length: number) {
   return (
     <>
-      <Hull d={hull(length, 6, 14, 10)} />
-      <Deck from={4} to={length - 10} top={7.6} bottom={12.4} />
-      <Turret x={length * 0.62} radius={1.9} />
-      <Block x={length * 0.3} width={length * 0.11} height={6.4} />
-      <Block x={length * 0.45} width={length * 0.06} height={4.6} />
+      <Hull d={hull(length, 4.4, 15.6, 12)} />
+      <Deck from={4} to={length - 12} top={6.6} bottom={13.4} />
+      <Turret x={length * 0.62} radius={2.1} />
+      <Block x={length * 0.28} width={length * 0.12} height={8.4} />
+      <Block x={length * 0.45} width={length * 0.07} height={5.4} />
     </>
   );
 }
 
 /** Submarine: a rounded pressure hull with a conning tower — blunt at both ends, unlike the rest. */
 function Submarine(length: number) {
-  const body = `M 6.5 6.8 Q 1.8 10 6.5 13.2 L ${length - 6} 13.2 Q ${length - 1.4} 10 ${length - 6} 6.8 Z`;
+  const body = `M 7.5 4.6 Q 1.6 10 7.5 15.4 L ${length - 7} 15.4 Q ${length - 1.4} 10 ${length - 7} 4.6 Z`;
   return (
     <>
       <Hull d={body} />
       <path
         d={`M 7 10 H ${length - 7}`}
         stroke="var(--ship-deck)"
-        strokeWidth="1.8"
+        strokeWidth="2.4"
         strokeLinecap="round"
         fill="none"
       />
-      {/* Conning tower amidships, plus the dive planes that make the shape read as a submarine. */}
+      {/* Sail with periscope masts, plus dive planes: no surface ship has this profile. */}
       <rect
-        x={length * 0.36}
-        y="7.2"
-        width={length * 0.14}
-        height="5.6"
-        rx="1.4"
+        x={length * 0.34}
+        y="5.4"
+        width={length * 0.16}
+        height="9.2"
+        rx="1.6"
         fill="var(--ship-detail)"
         className="ship-detail"
       />
       <path
-        d={`M ${length * 0.16} 7.6 V 12.4`}
+        d={`M ${length * 0.42} 5.4 V 2.4 M ${length * 0.46} 5.4 V 3.6`}
         stroke="var(--ship-detail)"
-        strokeWidth="1.4"
+        strokeWidth="1"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d={`M ${length * 0.14} 4.8 V 15.2`}
+        stroke="var(--ship-detail)"
+        strokeWidth="1.6"
         strokeLinecap="round"
         fill="none"
       />
@@ -209,10 +216,10 @@ function Submarine(length: number) {
 function Destroyer(length: number) {
   return (
     <>
-      <Hull d={hull(length, 6.6, 13.4, 9)} />
-      <Deck from={3.6} to={length - 9} top={8.2} bottom={11.8} />
-      <Turret x={length * 0.6} radius={1.7} />
-      <Block x={length * 0.28} width={length * 0.12} height={5.4} />
+      <Hull d={hull(length, 5.2, 14.8, 9)} />
+      <Deck from={3.6} to={length - 9} top={7.2} bottom={12.8} />
+      <Turret x={length * 0.6} radius={1.9} />
+      <Block x={length * 0.26} width={length * 0.13} height={7} />
     </>
   );
 }
