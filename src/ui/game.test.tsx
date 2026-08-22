@@ -80,17 +80,18 @@ async function aiTick(): Promise<void> {
 
 async function startGame(user: UserEvent): Promise<void> {
   await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
-  await user.click(screen.getByRole('button', { name: 'Start game' }));
+  await user.click(screen.getByRole('button', { name: 'Begin battle' }));
 }
 
 describe('Battleship app', () => {
   let user: UserEvent;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // `shouldAdvanceTime` keeps user-event's own waits working under fake timers.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App seed={SEED} aiDelayMs={AI_DELAY} />);
+    await user.click(screen.getByRole('button', { name: 'Start game' }));
   });
 
   afterEach(() => {
@@ -117,8 +118,8 @@ describe('Battleship app', () => {
       expect(status()).toContain('Overlaps Carrier');
     });
 
-    it('keeps Start game disabled until all five ships are placed', async () => {
-      const start = screen.getByRole('button', { name: 'Start game' });
+    it('keeps Begin battle disabled until all five ships are placed', async () => {
+      const start = screen.getByRole('button', { name: 'Begin battle' });
       expect(start).toHaveProperty('disabled', true);
 
       await user.click(ownCell({ r: 0, c: 0 }));
@@ -319,8 +320,24 @@ describe('Battleship app', () => {
       expect(screen.getByRole('heading', { name: 'Deploy your fleet' })).toBeDefined();
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(placedShips()).toHaveLength(0);
-      expect(screen.getByRole('button', { name: 'Start game' })).toHaveProperty('disabled', true);
+      expect(screen.getByRole('button', { name: 'Begin battle' })).toHaveProperty('disabled', true);
     });
+  });
+});
+
+describe('opening screen', () => {
+  it('greets a fresh visitor and hands over to placement on Start game', async () => {
+    const user = userEvent.setup();
+    render(<App seed={SEED} />);
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Battleship' })).toBeDefined();
+    expect(screen.getByText('Sink the enemy fleet before they sink yours.')).toBeDefined();
+    expect(screen.queryByRole('list', { name: 'Fleet' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Start game' }));
+
+    expect(screen.getByRole('heading', { name: 'Deploy your fleet' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Begin battle' })).toHaveProperty('disabled', true);
   });
 });
 

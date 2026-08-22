@@ -28,12 +28,16 @@ function enemyCell(page: Page, at: Coord): Locator {
 
 async function startBattle(page: Page): Promise<void> {
   await page.goto(URL);
+  // The opening screen comes first; placement is one click away.
+  await expect(page.getByText('Sink the enemy fleet before they sink yours.')).toBeVisible();
+  await page.getByRole('button', { name: 'Start game' }).click();
+
   await expect(page.getByRole('heading', { name: 'Deploy your fleet' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Start game' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Begin battle' })).toBeDisabled();
 
   await page.getByRole('button', { name: 'Randomize fleet' }).click();
-  await expect(page.getByRole('button', { name: 'Start game' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Start game' }).click();
+  await expect(page.getByRole('button', { name: 'Begin battle' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Begin battle' }).click();
 
   await expect(page.getByRole('region', { name: 'Enemy waters' })).toBeVisible();
   await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
@@ -83,7 +87,7 @@ test('plays a seeded game from placement through victory back to a clean board',
   await dialog.getByRole('button', { name: 'Play again' }).click();
   await expect(page.getByRole('heading', { name: 'Deploy your fleet' })).toBeVisible();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Start game' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Begin battle' })).toBeDisabled();
   await expect(
     page.getByRole('region', { name: 'Your waters' }).locator('[data-state="your ship"]'),
   ).toHaveCount(0);

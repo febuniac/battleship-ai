@@ -7,12 +7,13 @@ network calls, no persistence.
 
 ## How to play
 
-1. **Place your fleet.** Pick a ship from the tray, press **Rotate** (or `R`) to switch
+1. **Start game** on the opening screen to enter placement.
+2. **Place your fleet.** Pick a ship from the tray, press **Rotate** (or `R`) to switch
    orientation, then click a cell to drop it. Clicking a placed ship picks it back up.
-   **Randomize fleet** places all five for you; **Start game** unlocks once the fleet is legal.
-2. **Fire.** Click a cell on _Enemy waters_. A hit keeps your turn, a miss hands over to the AI,
+   **Randomize fleet** places all five for you; **Begin battle** unlocks once the fleet is legal.
+3. **Fire.** Click a cell on _Enemy waters_. A hit keeps your turn, a miss hands over to the AI,
    which then fires until it misses.
-3. **Win** by sinking all five enemy ships before the AI sinks yours, then **Play again**.
+4. **Win** by sinking all five enemy ships before the AI sinks yours, then **Play again**.
 
 Everything is keyboard-operable: `Tab` into a board, arrow keys / `Home` / `End` to move,
 `Enter` or `Space` to place or fire, `R` to rotate. Cells expose their coordinate and state
@@ -45,11 +46,12 @@ src/ai/       AIPlayer implementations
 src/ui/       React projection of the engine
   useGame.ts        the only React-side owner of game state: dispatches actions through
                     applyAction and paces the AI turn (one shot per timer tick)
+  WelcomeScreen     opening screen: title, matchup, one line, one CTA into placement
   PlacementScreen   ship tray, rotation (button + R), click placement, engine-backed preview
-  GameScreen        both boards, turn banner, fleet status, shot log, game-over overlay
-  components/       Board, Cell, ShipTray, StatusLog, TurnBanner, ValidationHint,
-                    GameOverOverlay, Legend, LiveRegion (polite aria-live announcements)
-  announcements.ts  one shared wording per shot, used by both the log and the live region
+  GameScreen        both boards, turn line, contextual status line, game-over overlay
+  components/       AppHeader, Board, Cell, ShipLayer, ShipSprite, ShipTray, StatusLine,
+                    TurnBanner, GameOverOverlay, LiveRegion (polite aria-live announcements)
+  announcements.ts  one shared wording per shot, used by the status line and the live region
   messages.ts       IllegalReason -> player-facing wording
   urlOptions.ts     `?seed=`/`?aiDelay=` test hooks for E2E determinism, not surfaced in the UI
 e2e/          Playwright journey against the production bundle
@@ -97,11 +99,12 @@ targeting behaviour, an information-leak test on `PlayerView`, and seeded self-p
 that the AI stays materially better than random guessing.
 
 The `ui` project adds behaviour tests (not snapshots) for the rules as the player experiences them:
-invalid-placement feedback, Start game gating, firing, cell lockout, the extra-turn streak, the
+the opening screen handoff, invalid-placement feedback, Begin battle gating, firing, cell lockout, the extra-turn streak, the
 handoff back to the player, game-over lockout, and a clean reset on Play again. They run against a
 fixed seed, so the AI fleet is known and hits/misses can be chosen deliberately.
 
-One Playwright suite covers the real journey end to end against the built bundle: randomize →
+One Playwright suite covers the real journey end to end against the built bundle: opening screen →
+randomize →
 start → hit keeps the turn → miss hands over → AI replies → seeded game played to victory →
 game-over stats → Play again returns to a clean placement screen, plus a keyboard-only pass and a
 390px viewport check for overflow and touch-target size. It asserts on state and accessible names

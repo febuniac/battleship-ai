@@ -208,7 +208,7 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
               onClick={() => game.start()}
               className="min-h-11 rounded-full bg-ink px-4 text-sm font-medium text-paper transition-[background-color,opacity] hover:bg-ink/90 disabled:bg-ink/12 disabled:text-ink-faint"
             >
-              Start game
+              Begin battle
             </button>
           </div>
         </div>
