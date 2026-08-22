@@ -1,3 +1,5 @@
+import { useRef, useState } from 'react';
+import { RulesDialog } from './components/RulesDialog.tsx';
 import { ShipSprite } from './components/ShipSprite.tsx';
 
 /**
@@ -16,6 +18,9 @@ const FLOTILLA = [
  * screen and the game are the same object seen from further away.
  */
 export function WelcomeScreen({ onStart }: { readonly onStart: () => void }) {
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const rulesTriggerRef = useRef<HTMLButtonElement>(null);
+
   return (
     <div className="mx-auto flex min-h-[80dvh] w-full max-w-[36rem] flex-col items-center justify-center gap-10 text-center sm:gap-12">
       <div className="animate-fade-in flex flex-col items-center gap-5">
@@ -46,13 +51,34 @@ export function WelcomeScreen({ onStart }: { readonly onStart: () => void }) {
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={onStart}
-        className="min-h-11 rounded-full bg-ink px-9 text-sm font-medium text-paper transition-[background-color,transform] hover:-translate-y-px hover:bg-ink/90"
-      >
-        Start game
-      </button>
+      <div className="flex flex-col items-center gap-5">
+        <button
+          type="button"
+          onClick={onStart}
+          className="min-h-11 rounded-full bg-ink px-9 text-sm font-medium text-paper transition-[background-color,transform] hover:-translate-y-px hover:bg-ink/90"
+        >
+          Start game
+        </button>
+        <button
+          ref={rulesTriggerRef}
+          type="button"
+          onClick={() => {
+            setRulesOpen(true);
+          }}
+          className="min-h-11 px-3 text-[0.65rem] tracking-[0.2em] text-ink-faint uppercase transition-colors hover:text-ink-soft"
+        >
+          The rules
+        </button>
+      </div>
+
+      {rulesOpen ? (
+        <RulesDialog
+          onClose={() => {
+            setRulesOpen(false);
+            rulesTriggerRef.current?.focus();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

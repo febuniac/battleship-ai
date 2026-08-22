@@ -339,6 +339,29 @@ describe('opening screen', () => {
     expect(screen.getByRole('heading', { name: 'Deploy your fleet' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Begin battle' })).toHaveProperty('disabled', true);
   });
+
+  it('opens the rules in a modal and closes it with Escape, returning focus', async () => {
+    const user = userEvent.setup();
+    render(<App seed={SEED} />);
+
+    const trigger = screen.getByRole('button', { name: 'The rules' });
+    await user.click(trigger);
+
+    const dialog = screen.getByRole('dialog', { name: 'The rules' });
+    expect(within(dialog).getByRole('heading', { name: 'Take turns' })).toBeDefined();
+    expect(within(dialog).getByText(/Carrier/)).toBeDefined();
+    expect(within(dialog).getByText('Ships may touch.')).toBeDefined();
+    expect(document.activeElement).toBe(
+      within(dialog).getByRole('button', { name: 'Close the rules' }),
+    );
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    // The rules are informational only: the game has not started.
+    expect(screen.getByRole('button', { name: 'Start game' })).toBeDefined();
+  });
 });
 
 /** Guards the fixture assumptions the deterministic tests above rely on. */

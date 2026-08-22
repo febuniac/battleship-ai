@@ -30,6 +30,14 @@ async function startBattle(page: Page): Promise<void> {
   await page.goto(URL);
   // The opening screen comes first; placement is one click away.
   await expect(page.getByText('Sink the enemy fleet before they sink yours.')).toBeVisible();
+
+  // The rules are a modal on the opening screen and must not start anything.
+  await page.getByRole('button', { name: 'The rules' }).click();
+  const rules = page.getByRole('dialog', { name: 'The rules' });
+  await expect(rules.getByText('Ships may touch.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(rules).toBeHidden();
+
   await page.getByRole('button', { name: 'Start game' }).click();
 
   await expect(page.getByRole('heading', { name: 'Deploy your fleet' })).toBeVisible();
