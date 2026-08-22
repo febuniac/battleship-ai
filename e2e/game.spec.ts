@@ -141,6 +141,105 @@ test('is playable with the keyboard and announces what happened', async ({ page 
   await expect(page.getByRole('status')).toContainText(/at B2|Your turn|AI is thinking/);
 });
 
+/**
+ * Guards the palette: the muted greys used for captions, coordinates and micro-copy are the
+ * easiest thing to make too pale, so every piece of visible text is measured against the surface
+ * it actually sits on (glass included) rather than trusted by eye.
+ */
+test('every visible text meets WCAG AA contrast', async ({ page }) => {
+  const measure = () =>
+    page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext('2d');
+      if (ctx === null) throw new Error('no 2d context');
+      // Colours are authored in oklch; a canvas resolves any CSS colour to real RGBA.
+      const resolve = (value: string): { rgb: number[]; alpha: number } => {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = value;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r = 0, g = 0, b = 0, a = 0] = ctx.getImageData(0, 0, 1, 1).data;
+        return { rgb: [r, g, b], alpha: a / 255 };
+      };
+      const luminance = ([r = 0, g = 0, b = 0]: number[]): number => {
+        const channel = (c: number): number => {
+          const v = c / 255;
+          return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+      };
+      const flatten = (top: number[], alpha: number, bottom: number[]): number[] =>
+        top.map((c, index) => c * alpha + (bottom[index] ?? 255) * (1 - alpha));
+      const surfaceUnder = (el: Element): number[] => {
+        const layers: { rgb: number[]; alpha: number }[] = [];
+        for (let node: Element | null = el; node !== null; node = node.parentElement) {
+          const layer = resolve(getComputedStyle(node).backgroundColor);
+          if (layer.alpha > 0) layers.push(layer);
+          if (layer.alpha === 1) break;
+        }
+        return layers.reduceRight<number[]>(
+          (below, layer) => flatten(layer.rgb, layer.alpha, below),
+          [255, 255, 255],
+        );
+      };
+
+      return [...document.querySelectorAll('body *')]
+        .filter((el) => {
+          const style = getComputedStyle(el);
+          return (
+            [...el.childNodes].some(
+              (n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '',
+            ) &&
+            el.getBoundingClientRect().height > 0 &&
+            style.visibility !== 'hidden' &&
+            style.opacity !== '0' &&
+            el.closest('.sr-only') === null &&
+            // WCAG 1.4.3 exempts inactive controls.
+            el.closest('[disabled], [aria-disabled="true"]') === null
+          );
+        })
+        .map((el) => {
+          const style = getComputedStyle(el);
+          const surface = surfaceUnder(el);
+          const { rgb, alpha } = resolve(style.color);
+          const text = luminance(flatten(rgb, alpha, surface));
+          const background = luminance(surface);
+          const ratio = (Math.max(text, background) + 0.05) / (Math.min(text, background) + 0.05);
+          const size = parseFloat(style.fontSize);
+          const large = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700);
+          return {
+            text: (el.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 24),
+            ratio: Number(ratio.toFixed(2)),
+            required: large ? 3 : 4.5,
+          };
+        })
+        .filter((sample) => sample.ratio < sample.required);
+    });
+
+  await page.goto(URL);
+  expect(await measure(), 'opening screen').toEqual([]);
+  await page.getByRole('button', { name: 'The rules' }).click();
+  await expect(page.getByRole('dialog', { name: 'The rules' })).toBeVisible();
+  expect(await measure(), 'rules modal').toEqual([]);
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('button', { name: 'Start game' }).click();
+  await expect(page.getByRole('heading', { name: 'Deploy your fleet' })).toBeVisible();
+  expect(await measure(), 'placement').toEqual([]);
+
+  await page.getByRole('button', { name: 'Randomize fleet' }).click();
+  await page.getByRole('button', { name: 'Begin battle' }).click();
+  await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
+  expect(await measure(), 'battle').toEqual([]);
+
+  for (const at of shipCells) {
+    await enemyCell(page, at).click();
+  }
+  await expect(page.getByRole('dialog', { name: 'Game over' })).toBeVisible();
+  expect(await measure(), 'game over').toEqual([]);
+});
+
 test('fits a mobile viewport without horizontal scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await startBattle(page);

@@ -106,8 +106,9 @@ fixed seed, so the AI fleet is known and hits/misses can be chosen deliberately.
 One Playwright suite covers the real journey end to end against the built bundle: opening screen →
 randomize →
 start → hit keeps the turn → miss hands over → AI replies → seeded game played to victory →
-game-over stats → Play again returns to a clean placement screen, plus a keyboard-only pass and a
-390px viewport check for overflow and touch-target size. It asserts on state and accessible names
+game-over stats → Play again returns to a clean placement screen, plus a keyboard-only pass, a
+390px viewport check for overflow and touch-target size, and a contrast pass that measures every
+visible text against the surface it actually sits on (glass included) at WCAG AA. It asserts on state and accessible names
 (`?seed=` fixes the fleet, `?aiDelay=0` removes pacing) rather than sleeping, and fails on any
 browser console error.
 
