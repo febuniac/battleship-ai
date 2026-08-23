@@ -127,7 +127,7 @@ describe('Battleship app', () => {
     user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App seed={SEED} aiDelayMs={AI_DELAY} />);
     await user.click(screen.getByRole('button', { name: 'Start game' }));
-    await user.click(screen.getByRole('button', { name: 'Begin placing' }));
+    await user.click(screen.getByRole('button', { name: 'Got it' }));
   });
 
   afterEach(() => {
@@ -144,7 +144,7 @@ describe('Battleship app', () => {
 
     it('tells a first-time player what to do and what the fleet numbers mean', () => {
       expect(screen.getByTestId('board-hud-friendly').textContent).toBe(
-        'Select your ships and place them on your board.',
+        'Tap a ship below, then tap the board to place it.',
       );
       const tray = screen.getByRole('list', { name: 'Fleet' });
       expect(tray.textContent).toContain('5 cells');
@@ -155,7 +155,7 @@ describe('Battleship app', () => {
       const hud = () => screen.getByTestId('board-hud-friendly');
 
       await user.click(trayRow('battleship'));
-      expect(hud().textContent).toBe('Place your Battleship.');
+      expect(hud().textContent).toBe('Now tap the board to place it.');
 
       await user.hover(ownCell({ r: 4, c: 0 }));
       expect(hud().textContent).toBe('Place Battleship here.');
@@ -167,7 +167,9 @@ describe('Battleship app', () => {
 
       await user.click(ownCell({ r: 4, c: 0 }));
       await user.unhover(ownCell({ r: 4, c: 0 }));
-      expect(hud().textContent).toBe('Battleship placed. Select your next ship.');
+      // The next ship is already in hand, so the instruction is the next move, not a receipt.
+      expect(hud().textContent).toBe('Now tap the board to place it.');
+      expect(status()).toBe('Battleship placed');
 
       await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
       expect(hud().textContent).toBe('Fleet ready. Begin battle.');
@@ -295,6 +297,28 @@ describe('Battleship app', () => {
       expect(announcement()).toBe('Orientation vertical');
       await user.keyboard('r');
       expect(announcement()).toBe('Orientation horizontal');
+    });
+
+    it('rotates from a visible control that shows the current direction', async () => {
+      const rotateButton = () => screen.getByRole('button', { name: /^Rotate ship/ });
+      expect(rotateButton().dataset.orientation).toBe('horizontal');
+
+      await user.click(rotateButton());
+      expect(rotateButton().dataset.orientation).toBe('vertical');
+      expect(announcement()).toBe('Orientation vertical');
+
+      await user.click(ownCell({ r: 0, c: 0 }));
+      expect(shipArea('carrier')).toBe('1 / 1 / span 5');
+    });
+
+    it('marks the selected ship in the tray and moves the mark on to the next one', async () => {
+      await user.click(trayRow('destroyer'));
+      expect(trayRow('destroyer').dataset.selected).toBe('true');
+      expect(trayRow('carrier').dataset.selected).toBe('false');
+
+      await user.click(ownCell({ r: 9, c: 0 }));
+      expect(trayRow('destroyer').dataset.selected).toBe('false');
+      expect(trayRow('carrier').dataset.selected).toBe('true');
     });
 
     it('places a ship with the keyboard and announces it', async () => {
@@ -650,8 +674,12 @@ describe('stage introductions', () => {
     const intro = screen.getByRole('dialog', { name: 'Place your fleet' });
     // The invitation belongs to the water it explains, not to the page.
     expect(screen.getByRole('region', { name: 'Your waters' }).contains(intro)).toBe(true);
-    expect(within(intro).getByText('Click to begin placing')).toBeDefined();
-    const cta = within(intro).getByRole('button', { name: 'Begin placing' });
+    expect(
+      within(intro).getByText(
+        'Tap a ship below, then tap the board to place it. Tap rotate to change direction.',
+      ),
+    ).toBeDefined();
+    const cta = within(intro).getByRole('button', { name: 'Got it' });
     expect(document.activeElement).toBe(cta);
     // Placement is not on offer yet.
     expect(isLocked(ownCell({ r: 0, c: 0 }))).toBe(true);
@@ -660,7 +688,7 @@ describe('stage introductions', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByTestId('board-hud-friendly').textContent).toBe(
-      'Select your ships and place them on your board.',
+      'Tap a ship below, then tap the board to place it.',
     );
     expect(isLocked(ownCell({ r: 0, c: 0 }))).toBe(false);
 
@@ -671,7 +699,7 @@ describe('stage introductions', () => {
 
   it('invites the first attack over the enemy board, then never again', async () => {
     await user.click(screen.getByRole('button', { name: 'Start game' }));
-    await user.click(screen.getByRole('button', { name: 'Begin placing' }));
+    await user.click(screen.getByRole('button', { name: 'Got it' }));
     await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
     await user.click(screen.getByRole('button', { name: 'Begin battle' }));
 
@@ -700,7 +728,7 @@ describe('stage introductions', () => {
 
   it('does not repeat either invitation on a second game', async () => {
     await user.click(screen.getByRole('button', { name: 'Start game' }));
-    await user.click(screen.getByRole('button', { name: 'Begin placing' }));
+    await user.click(screen.getByRole('button', { name: 'Got it' }));
     await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
     await user.click(screen.getByRole('button', { name: 'Begin battle' }));
     await user.click(screen.getByRole('button', { name: 'Start attack' }));
@@ -720,6 +748,78 @@ describe('stage introductions', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByTestId('board-hud-enemy').textContent).toBe('Select where to attack.');
+  });
+});
+
+/**
+ * The same placement screen on a screen that cannot hover. A tap has to do the aiming a pointer
+ * does by moving, so it previews first and only commits on a second tap or from the button.
+ */
+describe('placement on a touch screen', () => {
+  let user: UserEvent;
+
+  beforeEach(async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(hover: none)',
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    user = userEvent.setup();
+    render(<App seed={SEED} aiDelayMs={AI_DELAY} />);
+    await user.click(screen.getByRole('button', { name: 'Start game' }));
+    await user.click(screen.getByRole('button', { name: 'Got it' }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('previews the ship on the first tap and places it on the second', async () => {
+    const hud = () => screen.getByTestId('board-hud-friendly');
+
+    await user.click(ownCell({ r: 2, c: 1 }));
+    // Nothing is committed yet: the footprint is only drawn on the water.
+    expect(placedShips()).toHaveLength(0);
+    expect(ownCell({ r: 2, c: 1 }).getAttribute('aria-label')).toBe('B3, valid placement');
+    expect(hud().textContent).toBe('Tap again to place your Carrier.');
+
+    await user.click(ownCell({ r: 2, c: 1 }));
+    expect(placedShips()).toEqual(['carrier']);
+    expect(shipArea('carrier')).toBe('2 / span 5 / 3');
+  });
+
+  it('moves the preview to whichever square is tapped next', async () => {
+    await user.click(ownCell({ r: 2, c: 1 }));
+    await user.click(ownCell({ r: 5, c: 0 }));
+    expect(placedShips()).toHaveLength(0);
+    expect(ownCell({ r: 2, c: 1 }).getAttribute('aria-label')).toBe('B3, unknown');
+
+    await user.click(ownCell({ r: 5, c: 0 }));
+    expect(shipArea('carrier')).toBe('1 / span 5 / 6');
+  });
+
+  it('rotates the pending preview in place before it is committed', async () => {
+    await user.click(ownCell({ r: 0, c: 0 }));
+    await user.click(screen.getByRole('button', { name: /^Rotate ship/ }));
+    expect(ownCell({ r: 4, c: 0 }).getAttribute('aria-label')).toBe('A5, valid placement');
+
+    await user.click(screen.getByTestId('confirm-placement'));
+    expect(shipArea('carrier')).toBe('1 / 1 / span 5');
+  });
+
+  it('offers the placement as a button, and refuses a position the engine rejects', async () => {
+    await user.click(ownCell({ r: 0, c: 0 }));
+    expect(screen.getByTestId('confirm-placement').textContent).toBe('Place Carrier at A1');
+    await user.click(screen.getByTestId('confirm-placement'));
+    expect(placedShips()).toEqual(['carrier']);
+
+    // The Battleship is in hand now; A1 is taken, so the offer states it cannot be used.
+    await user.click(ownCell({ r: 0, c: 0 }));
+    const confirm = screen.getByTestId('confirm-placement');
+    expect(confirm.textContent).toBe('That position is unavailable');
+    expect(confirm).toHaveProperty('disabled', true);
+    expect(placedShips()).toEqual(['carrier']);
   });
 });
 

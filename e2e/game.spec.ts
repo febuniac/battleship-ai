@@ -78,14 +78,17 @@ async function startBattle(page: Page): Promise<void> {
   const placementIntro = page.getByRole('dialog', { name: 'Place your fleet' });
   await expect(placementIntro).toBeVisible();
   await expectInsideBoard(page, 'Your waters', placementIntro);
-  await expect(placementIntro.getByRole('button', { name: 'Begin placing' })).toBeFocused();
-  await placementIntro.getByRole('button', { name: 'Begin placing' }).click();
+  await expect(placementIntro).toContainText(
+    'Tap a ship below, then tap the board to place it. Tap rotate to change direction.',
+  );
+  await expect(placementIntro.getByRole('button', { name: 'Got it' })).toBeFocused();
+  await placementIntro.getByRole('button', { name: 'Got it' }).click();
   await expect(placementIntro).toBeHidden();
 
   // Away from the water, so the board asks for the first move rather than previewing one.
   await page.mouse.move(0, 0);
   await expect(page.getByTestId('board-hud-friendly')).toHaveText(
-    'Select your ships and place them on your board.',
+    'Tap a ship below, then tap the board to place it.',
   );
   await expectHudInsideBoard(page, 'Your waters', 'friendly');
 
@@ -297,7 +300,7 @@ test('every visible text meets WCAG AA contrast', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Deploy your fleet' })).toBeVisible();
   // The stage introductions are measured too, then dismissed.
   expect(await measure(), 'placement intro').toEqual([]);
-  await page.getByRole('button', { name: 'Begin placing' }).click();
+  await page.getByRole('button', { name: 'Got it' }).click();
   expect(await measure(), 'placement').toEqual([]);
 
   await page.getByRole('button', { name: 'Randomize fleet' }).click();
