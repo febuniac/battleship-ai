@@ -7,8 +7,12 @@ describe('optionsFromUrl', () => {
     expect(optionsFromUrl('?other=1')).toEqual({});
   });
 
-  it('reads a seed and an AI delay', () => {
-    expect(optionsFromUrl('?seed=42&aiDelay=0')).toEqual({ seed: 42, aiDelayMs: 0 });
+  it('reads a seed, an AI delay and the idle-turn wait', () => {
+    expect(optionsFromUrl('?seed=42&aiDelay=0&idlePrompt=500')).toEqual({
+      seed: 42,
+      aiDelayMs: 0,
+      idlePromptMs: 500,
+    });
   });
 
   it('ignores values that are not usable', () => {

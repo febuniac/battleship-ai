@@ -4,8 +4,13 @@ import { PlacementScreen } from './PlacementScreen.tsx';
 import { useGame, type UseGameOptions } from './useGame.ts';
 import { WelcomeScreen } from './WelcomeScreen.tsx';
 
-export function App(options: UseGameOptions = {}) {
-  const game = useGame(options);
+export interface AppOptions extends UseGameOptions {
+  /** Idle wait before the battle points out that the turn is the player's. */
+  readonly idlePromptMs?: number;
+}
+
+export function App({ idlePromptMs, ...gameOptions }: AppOptions = {}) {
+  const game = useGame(gameOptions);
   // Purely a view flag: the engine has no notion of a title screen, and Play again resets the
   // game to `placement` without coming back through here.
   const [entered, setEntered] = useState(false);
@@ -36,6 +41,7 @@ export function App(options: UseGameOptions = {}) {
       ) : (
         <GameScreen
           game={game}
+          {...(idlePromptMs === undefined ? {} : { idlePromptMs })}
           intro={!battleIntroSeen}
           onIntroDismiss={() => {
             setBattleIntroSeen(true);

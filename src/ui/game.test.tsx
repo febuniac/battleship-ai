@@ -6,6 +6,7 @@ import { applyAction, createInitialState } from '../engine/reducer.ts';
 import { shipSpec } from '../engine/rules.ts';
 import type { Coord } from '../engine/types.ts';
 import { App } from './App.tsx';
+import { IDLE_PROMPT_MS } from './useIdlePrompt.ts';
 
 const SEED = 20240617;
 // Long enough that the shared clock never fires a shot on its own: every AI shot in these
@@ -102,6 +103,25 @@ async function settleResult(): Promise<void> {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1_000);
   });
+}
+
+/** Sit out the idle-turn wait, with a little slack so the timer has certainly fired. */
+async function idleWait(): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(IDLE_PROMPT_MS + 100);
+  });
+}
+
+function idlePrompt(): HTMLElement | null {
+  return screen.queryByTestId('idle-prompt');
+}
+
+/** Cells currently playing the “this hull went down” animation on a board. */
+function sinkingCells(boardLabel: string): string[] {
+  const board = screen.getByRole('region', { name: boardLabel });
+  return [...board.querySelectorAll<HTMLElement>('.animate-shot-sunk')].map(
+    (cell) => cell.dataset.coord ?? '',
+  );
 }
 
 /** Let exactly one paced AI shot resolve. */
@@ -521,6 +541,101 @@ describe('Battleship app', () => {
       expect(isLocked(enemyCell(target))).toBe(true);
       expect(banner()).toBe(YOUR_TURN);
       expect(announcement()).toMatch(/^You (hit|sank)/);
+    });
+
+    it('names a sunk hull on the water, and says nothing on a plain hit', async () => {
+      const notice = () => screen.queryByTestId('sunk-notice-human');
+      const ship = shipAt(aiBoard, aiShipCells[0] as Coord);
+      if (ship === undefined) throw new Error('expected a ship on the seeded enemy board');
+
+      for (const cell of ship.cells.slice(0, -1)) {
+        await user.click(enemyCell(cell));
+        // A hit is not a sinking: no notice, and only the struck square animates.
+        expect(notice()).toBeNull();
+        expect(sinkingCells('Enemy waters')).toHaveLength(0);
+      }
+
+      await user.click(enemyCell(ship.cells.at(-1) as Coord));
+
+      expect(notice()?.textContent).toBe(`${shipSpec(ship.id).name.toUpperCase()} SUNK`);
+      // The whole hull is highlighted, not just the square that finished it.
+      expect(sinkingCells('Enemy waters').sort()).toEqual(
+        ship.cells.map((cell) => coordLabel(cell)).sort(),
+      );
+      // Nothing to dismiss: the next shot lands while the notice is still up.
+      const next = aiWaterCells[0] as Coord;
+      await user.click(enemyCell(next));
+      expect(enemyCell(next).getAttribute('aria-label')).toMatch(/, miss$/);
+
+      // The news keeps its beat, then the board goes back to narrating the turn.
+      await settleResult();
+      expect(notice()).toBeNull();
+    });
+
+    it("says the turn is still the player's after a hit", async () => {
+      const hud = () => screen.getByTestId('board-hud-enemy');
+      const target = aiShipCells[0] as Coord;
+
+      await user.click(enemyCell(target));
+      await user.unhover(enemyCell(target));
+      await settleResult();
+
+      expect(hud().textContent).toBe('Your turn • Keep firing!');
+      expect(banner()).toBe(YOUR_TURN);
+      // And the invitation still names a square once the player aims at one.
+      const next = aiWaterCells[0] as Coord;
+      await user.hover(enemyCell(next));
+      expect(hud().textContent).toBe(`Fire at ${coordLabel(next)}`);
+    });
+
+    it('points out an idle turn, and stops as soon as the player acts', async () => {
+      expect(idlePrompt()).toBeNull();
+
+      await idleWait();
+      expect(idlePrompt()?.textContent).toBe("You're up! Make your next move.");
+      // A nudge, not a gate: the board underneath is still live.
+      expect(isLocked(enemyCell(aiWaterCells[0] as Coord))).toBe(false);
+
+      await user.hover(enemyCell(aiWaterCells[0] as Coord));
+      expect(idlePrompt()).toBeNull();
+    });
+
+    it('restarts the idle wait on every shot the player takes', async () => {
+      const ship = shipAt(aiBoard, aiShipCells[0] as Coord);
+      if (ship === undefined) throw new Error('expected a ship on the seeded enemy board');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(IDLE_PROMPT_MS - 5_000);
+      });
+      expect(idlePrompt()).toBeNull();
+
+      // A hit keeps the turn, so the wait starts over rather than expiring mid-streak.
+      await user.click(enemyCell(ship.cells[0] as Coord));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(IDLE_PROMPT_MS - 5_000);
+      });
+      expect(idlePrompt()).toBeNull();
+
+      await idleWait();
+      expect(idlePrompt()).not.toBeNull();
+    });
+
+    it('never points out a turn the player does not have', async () => {
+      await user.click(enemyCell(aiWaterCells[0] as Coord));
+      expect(banner()).toContain(AI_TURN);
+
+      await idleWait();
+      expect(idlePrompt()).toBeNull();
+    });
+
+    it('stays quiet once the game is over', async () => {
+      for (const cell of aiShipCells) {
+        await user.click(enemyCell(cell));
+      }
+      expect(screen.getByRole('dialog', { name: 'Game over' })).toBeDefined();
+
+      await idleWait();
+      expect(idlePrompt()).toBeNull();
     });
 
     it('fires with the keyboard on the focused cell', async () => {
