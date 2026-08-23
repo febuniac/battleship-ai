@@ -42,7 +42,7 @@ export function ShipLayer({ ships }: { readonly ships: readonly ShipVisual[] }) 
         <div
           key={`${ship.shipId}:${ship.origin.r},${ship.origin.c}:${ship.orientation}:${ship.tone}`}
           style={gridArea(ship)}
-          className={`flex items-center justify-center ${TONE_ANIMATION[ship.tone]}`}
+          className={`relative flex items-center justify-center ${TONE_ANIMATION[ship.tone]}`}
         >
           <ShipSprite
             shipId={ship.shipId}
@@ -50,6 +50,12 @@ export function ShipLayer({ ships }: { readonly ships: readonly ShipVisual[] }) 
             tone={ship.tone}
             className="h-full w-full overflow-visible"
           />
+          {/*
+           * The moment a hull goes down: one impact ring over the length of the ship, played once
+           * on the wreck's own mount, then gone. It leaves no trace to distinguish an old wreck
+           * from a fresh one, and it never covers the cells, which stay above it.
+           */}
+          {ship.tone === 'wreck' ? <span data-testid="sink-burst" className="sink-burst" /> : null}
         </div>
       ))}
     </div>
