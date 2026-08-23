@@ -372,6 +372,26 @@ describe('Battleship app', () => {
       expect(revealed[0]?.dataset.ship).toBe('carrier');
       expect(revealed[0]?.classList.contains('ship-tone-wreck')).toBe(true);
     });
+
+    it('bursts over a hull only on the shot that sinks it', async () => {
+      await startGame(user);
+      const bursts = () =>
+        within(screen.getByRole('region', { name: 'Enemy waters' })).queryAllByTestId('sink-burst');
+
+      const ship = shipAt(aiBoard, aiShipCells[0] as Coord);
+      if (ship === undefined) throw new Error('expected a ship on the seeded enemy board');
+
+      for (const cell of ship.cells.slice(0, -1)) {
+        await user.click(enemyCell(cell));
+        expect(bursts()).toHaveLength(0);
+      }
+
+      await user.click(enemyCell(ship.cells.at(-1) as Coord));
+      expect(bursts()).toHaveLength(1);
+      expect(
+        bursts()[0]?.parentElement?.querySelector('[data-ship]')?.getAttribute('data-ship'),
+      ).toBe(ship.id);
+    });
   });
 
   describe('gameplay', () => {

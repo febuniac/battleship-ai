@@ -396,6 +396,41 @@
   }
 }
 
+/*
+ * A hull going down, read at the scale of the whole ship: the water lifts once along its length
+ * and a single ring opens past its beam, both gone inside the same beat as the list.
+ */
+@keyframes sink-swell {
+  0% {
+    transform: scale(0.86);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+}
+
+@keyframes sink-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0;
+    border-width: 2px;
+  }
+  25% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
 @keyframes thinking-pulse {
   0%,
   100% {
@@ -473,6 +508,43 @@
   .animate-shot-hit > svg {
     animation: impact-flash 380ms ease-out;
   }
+
+  /*
+   * The sink burst covers the ship's own footprint, not the board: a warm swell over the hull and
+   * one ring opening out of it. Purely decorative, so it never takes pointer events away from the
+   * cells it sits above, and it ends fully transparent.
+   */
+  .sink-burst {
+    position: absolute;
+    inset: -12%;
+    pointer-events: none;
+  }
+
+  .sink-burst::before,
+  .sink-burst::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    /* An ellipse over the hull's own proportions, so a 5-cell ring is not a 2-cell ring stretched. */
+    border-radius: 50%;
+    opacity: 0;
+  }
+
+  .sink-burst::before {
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in oklab, var(--color-impact) 42%, transparent) 0 30%,
+      color-mix(in oklab, var(--color-impact) 16%, transparent) 58%,
+      transparent 78%
+    );
+    animation: sink-swell 640ms ease-out forwards;
+  }
+
+  .sink-burst::after {
+    border: 2px solid color-mix(in oklab, var(--color-impact) 55%, transparent);
+    animation: sink-ring 720ms 60ms ease-out forwards;
+  }
 }
 
 /*
@@ -507,6 +579,12 @@
   .animate-shot-miss::before,
   .animate-shot-miss::after,
   .animate-shot-hit::after {
+    content: none;
+  }
+
+  /* The wreck and its "SUNK" line carry the news; the burst adds nothing but motion. */
+  .sink-burst::before,
+  .sink-burst::after {
     content: none;
   }
 }
