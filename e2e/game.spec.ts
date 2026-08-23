@@ -317,6 +317,24 @@ test('every visible text meets WCAG AA contrast', async ({ page }) => {
   expect(await measure(), 'game over').toEqual([]);
 });
 
+test('names itself and flies its own flag in the browser tab', async ({ page }) => {
+  await page.goto(URL);
+  await expect(page).toHaveTitle('Battleship AI');
+
+  // The tab icon must be the ship, not the browser's fallback: the file has to resolve and parse.
+  const href = await page.locator('link[rel="icon"]').getAttribute('href');
+  const icon = await page.request.get(href ?? '');
+  expect(icon.status()).toBe(200);
+  expect(icon.headers()['content-type']).toContain('image/svg+xml');
+  const drawn = await page.evaluate(async (src) => {
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    return [image.naturalWidth, image.naturalHeight];
+  }, href ?? '');
+  expect(drawn).toEqual([32, 32]);
+});
+
 test('fits a mobile viewport without horizontal scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await startBattle(page);
