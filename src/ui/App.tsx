@@ -9,6 +9,12 @@ export function App(options: UseGameOptions = {}) {
   // Purely a view flag: the engine has no notion of a title screen, and Play again resets the
   // game to `placement` without coming back through here.
   const [entered, setEntered] = useState(false);
+  /*
+   * The two stage introductions are onboarding, not ceremony: each is shown once and stays gone,
+   * so a second game — Play again included — starts straight in the interaction.
+   */
+  const [placementIntroSeen, setPlacementIntroSeen] = useState(false);
+  const [battleIntroSeen, setBattleIntroSeen] = useState(false);
 
   return (
     <main className="min-h-dvh px-4 py-6 sm:px-8 sm:py-10 lg:px-12 lg:py-14">
@@ -19,9 +25,22 @@ export function App(options: UseGameOptions = {}) {
           }}
         />
       ) : game.state.phase === 'placement' ? (
-        <PlacementScreen game={game} autoFocusBoard={game.generation > 0} />
+        <PlacementScreen
+          game={game}
+          autoFocusBoard={game.generation > 0}
+          intro={!placementIntroSeen}
+          onIntroDismiss={() => {
+            setPlacementIntroSeen(true);
+          }}
+        />
       ) : (
-        <GameScreen game={game} />
+        <GameScreen
+          game={game}
+          intro={!battleIntroSeen}
+          onIntroDismiss={() => {
+            setBattleIntroSeen(true);
+          }}
+        />
       )}
     </main>
   );

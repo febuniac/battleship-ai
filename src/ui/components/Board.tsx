@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { allCoords, coordLabel } from '../../engine/board.ts';
 import { BOARD_SIZE } from '../../engine/rules.ts';
 import type { Coord } from '../../engine/types.ts';
@@ -83,6 +83,8 @@ export interface BoardProps {
   readonly hoverOnFocus?: boolean;
   readonly cellDisabled?: (at: Coord) => boolean;
   readonly disabled?: boolean;
+  /** Drawn over the water, covering the grid: the stage's one-time introduction. */
+  readonly overlay?: ReactNode;
   /**
    * Changing this value moves keyboard focus into the grid. Used at the moments where focus
    * would otherwise be lost (entering the battle, returning from the game-over dialog).
@@ -111,6 +113,7 @@ export function Board({
   hoverOnFocus = true,
   cellDisabled,
   disabled = false,
+  overlay,
   focusKey,
 }: BoardProps) {
   const afloat = (ships ?? []).filter((ship) => ship.tone !== 'wreck');
@@ -222,6 +225,8 @@ export function Board({
             <ShipLayer ships={wrecks} />
           </div>
         </div>
+
+        {overlay}
       </div>
     </section>
   );

@@ -114,6 +114,8 @@ async function aiTick(): Promise<void> {
 async function startGame(user: UserEvent): Promise<void> {
   await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
   await user.click(screen.getByRole('button', { name: 'Begin battle' }));
+  // The battle opens on its one-time introduction; the tests play the game behind it.
+  await user.click(screen.getByRole('button', { name: 'Start attack' }));
 }
 
 describe('Battleship app', () => {
@@ -125,6 +127,7 @@ describe('Battleship app', () => {
     user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<App seed={SEED} aiDelayMs={AI_DELAY} />);
     await user.click(screen.getByRole('button', { name: 'Start game' }));
+    await user.click(screen.getByRole('button', { name: 'Begin placing' }));
   });
 
   afterEach(() => {
@@ -605,6 +608,98 @@ describe('Battleship app', () => {
       expect(placedShips()).toHaveLength(0);
       expect(screen.getByRole('button', { name: 'Begin battle' })).toHaveProperty('disabled', true);
     });
+  });
+});
+
+describe('stage introductions', () => {
+  let user: UserEvent;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<App seed={SEED} aiDelayMs={AI_DELAY} />);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('invites the player into placement over their own board, once', async () => {
+    await user.click(screen.getByRole('button', { name: 'Start game' }));
+
+    const intro = screen.getByRole('dialog', { name: 'Place your fleet' });
+    // The invitation belongs to the water it explains, not to the page.
+    expect(screen.getByRole('region', { name: 'Your waters' }).contains(intro)).toBe(true);
+    expect(within(intro).getByText('Click to begin placing')).toBeDefined();
+    const cta = within(intro).getByRole('button', { name: 'Begin placing' });
+    expect(document.activeElement).toBe(cta);
+    // Placement is not on offer yet.
+    expect(isLocked(ownCell({ r: 0, c: 0 }))).toBe(true);
+
+    await user.keyboard('{Enter}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByTestId('board-hud-friendly').textContent).toBe(
+      'Select your ships and place them on your board.',
+    );
+    expect(isLocked(ownCell({ r: 0, c: 0 }))).toBe(false);
+
+    await user.click(ownCell({ r: 0, c: 0 }));
+    expect(placedShips()).toEqual(['carrier']);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('invites the first attack over the enemy board, then never again', async () => {
+    await user.click(screen.getByRole('button', { name: 'Start game' }));
+    await user.click(screen.getByRole('button', { name: 'Begin placing' }));
+    await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
+    await user.click(screen.getByRole('button', { name: 'Begin battle' }));
+
+    const intro = screen.getByRole('dialog', { name: 'Choose your target' });
+    expect(screen.getByRole('region', { name: 'Enemy waters' }).contains(intro)).toBe(true);
+    expect(within(intro).getByText('Select a position to attack')).toBeDefined();
+    const cta = within(intro).getByRole('button', { name: 'Start attack' });
+    expect(document.activeElement).toBe(cta);
+    expect(isLocked(enemyCell(aiWaterCells[0] as Coord))).toBe(true);
+
+    await user.click(cta);
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByTestId('board-hud-enemy').textContent).toBe('Select where to attack.');
+
+    // A miss hands the turn over and back; neither transition brings the invitation back.
+    await user.click(enemyCell(aiWaterCells[0] as Coord));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await settleResult();
+    await aiTick();
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await user.click(enemyCell(aiShipCells[0] as Coord));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does not repeat either invitation on a second game', async () => {
+    await user.click(screen.getByRole('button', { name: 'Start game' }));
+    await user.click(screen.getByRole('button', { name: 'Begin placing' }));
+    await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
+    await user.click(screen.getByRole('button', { name: 'Begin battle' }));
+    await user.click(screen.getByRole('button', { name: 'Start attack' }));
+
+    for (const cell of aiShipCells) {
+      await user.click(enemyCell(cell));
+    }
+    const over = screen.getByRole('dialog', { name: 'Game over' });
+    await user.click(within(over).getByRole('button', { name: 'Play again' }));
+
+    // Placement again, straight into the interaction.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(isLocked(ownCell({ r: 0, c: 0 }))).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Randomize fleet' }));
+    await user.click(screen.getByRole('button', { name: 'Begin battle' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByTestId('board-hud-enemy').textContent).toBe('Select where to attack.');
   });
 });
 

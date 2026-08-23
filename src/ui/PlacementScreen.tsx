@@ -4,6 +4,7 @@ import { FLEET, shipSpec } from '../engine/rules.ts';
 import type { Coord, Orientation, ShipId } from '../engine/types.ts';
 import { AppHeader } from './components/AppHeader.tsx';
 import { Board, type BoardHud } from './components/Board.tsx';
+import { BoardIntro } from './components/BoardIntro.tsx';
 import type { CellVariant } from './components/Cell.tsx';
 import { LiveRegion } from './components/LiveRegion.tsx';
 import type { ShipVisual } from './components/ShipLayer.tsx';
@@ -19,9 +20,17 @@ export interface PlacementScreenProps {
   readonly game: Game;
   /** Set when arriving from a finished game, where focus would otherwise be lost. */
   readonly autoFocusBoard?: boolean;
+  /** Whether the stage's one-time introduction is still owed to the player. */
+  readonly intro?: boolean;
+  readonly onIntroDismiss?: () => void;
 }
 
-export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScreenProps) {
+export function PlacementScreen({
+  game,
+  autoFocusBoard = false,
+  intro = false,
+  onIntroDismiss,
+}: PlacementScreenProps) {
   const board = game.state.boards.human;
   const [selected, setSelected] = useState<ShipId | null>(FLEET[0]?.id ?? null);
   const [orientation, setOrientation] = useState<Orientation>('horizontal');
@@ -196,7 +205,20 @@ export function PlacementScreen({ game, autoFocusBoard = false }: PlacementScree
             ships={ships}
             onSelect={onCellSelect}
             onHover={setHover}
-            {...(autoFocusBoard ? { focusKey: game.generation } : {})}
+            disabled={intro}
+            {...(intro
+              ? {
+                  overlay: (
+                    <BoardIntro
+                      title="Place your fleet"
+                      detail="Click to begin placing"
+                      action="Begin placing"
+                      onDismiss={() => onIntroDismiss?.()}
+                    />
+                  ),
+                }
+              : {})}
+            {...(autoFocusBoard && !intro ? { focusKey: game.generation } : {})}
           />
         </div>
 

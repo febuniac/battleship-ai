@@ -11,6 +11,7 @@ import type {
 import { battleAnnouncement, shotHeadline } from './announcements.ts';
 import { AppHeader } from './components/AppHeader.tsx';
 import { Board, type BoardHud } from './components/Board.tsx';
+import { BoardIntro } from './components/BoardIntro.tsx';
 import { ConfirmNewGame } from './components/ConfirmNewGame.tsx';
 import type { CellAnimation, CellVariant } from './components/Cell.tsx';
 import { GameOverOverlay } from './components/GameOverOverlay.tsx';
@@ -65,7 +66,14 @@ function sunkCaption(board: BoardModel): string | undefined {
   return sunk === 0 ? undefined : `${sunk} of ${FLEET.length} sunk`;
 }
 
-export function GameScreen({ game }: { readonly game: Game }) {
+export interface GameScreenProps {
+  readonly game: Game;
+  /** Whether the battle's one-time introduction is still owed to the player. */
+  readonly intro?: boolean;
+  readonly onIntroDismiss?: () => void;
+}
+
+export function GameScreen({ game, intro = false, onIntroDismiss }: GameScreenProps) {
   const { state, aiThinking } = game;
   // Tagged with the log length it happened at, so the notice disappears once a shot lands.
   const [rejected, setRejected] = useState<{
@@ -220,9 +228,20 @@ export function GameScreen({ game }: { readonly game: Game }) {
           // Keyboard focus should not read as aiming: the cell's own label already says where it is.
           hoverOnFocus={false}
           cellDisabled={(at) => shotAt(enemyBoard, at) !== 'unknown'}
-          disabled={!playable}
-          // Entering the battle (and returning from a finished game) puts focus on the grid.
-          focusKey={game.generation}
+          disabled={!playable || intro}
+          {...(intro
+            ? {
+                overlay: (
+                  <BoardIntro
+                    title="Choose your target"
+                    detail="Select a position to attack"
+                    action="Start attack"
+                    onDismiss={() => onIntroDismiss?.()}
+                  />
+                ),
+              }
+            : // Dismissing the introduction hands the grid the focus the overlay held.
+              { focusKey: game.generation })}
         />
 
         <Board

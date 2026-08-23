@@ -26,7 +26,9 @@ function enemyCell(page: Page, at: Coord): Locator {
   return cell(page, 'Enemy waters', at);
 }
 
-async function boxOf(locator: Locator): Promise<{ y: number; height: number }> {
+async function boxOf(
+  locator: Locator,
+): Promise<{ x: number; y: number; width: number; height: number }> {
   const box = await locator.boundingBox();
   if (box === null) throw new Error('expected the element to be laid out');
   return box;
@@ -40,6 +42,16 @@ async function expectHudInsideBoard(page: Page, board: string, side: string): Pr
   const firstCell = await boxOf(region.locator('[data-coord="A1"]'));
   expect(hud.y).toBeGreaterThanOrEqual(ocean.y - 1);
   expect(hud.y + hud.height).toBeLessThanOrEqual(firstCell.y + 1);
+}
+
+/** An introduction belongs to the water it explains, and must stay within it. */
+async function expectInsideBoard(page: Page, label: string, panel: Locator): Promise<void> {
+  const ocean = await boxOf(page.getByRole('region', { name: label }).locator('.ocean'));
+  const box = await boxOf(panel);
+  expect(box.x).toBeGreaterThanOrEqual(ocean.x - 1);
+  expect(box.y).toBeGreaterThanOrEqual(ocean.y - 1);
+  expect(box.x + box.width).toBeLessThanOrEqual(ocean.x + ocean.width + 1);
+  expect(box.y + box.height).toBeLessThanOrEqual(ocean.y + ocean.height + 1);
 }
 
 async function startBattle(page: Page): Promise<void> {
@@ -61,6 +73,15 @@ async function startBattle(page: Page): Promise<void> {
 
   await expect(page.getByRole('heading', { name: 'Deploy your fleet' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Begin battle' })).toBeDisabled();
+
+  // Placement opens on its one-time invitation, drawn over the player's own water.
+  const placementIntro = page.getByRole('dialog', { name: 'Place your fleet' });
+  await expect(placementIntro).toBeVisible();
+  await expectInsideBoard(page, 'Your waters', placementIntro);
+  await expect(placementIntro.getByRole('button', { name: 'Begin placing' })).toBeFocused();
+  await placementIntro.getByRole('button', { name: 'Begin placing' }).click();
+  await expect(placementIntro).toBeHidden();
+
   // Away from the water, so the board asks for the first move rather than previewing one.
   await page.mouse.move(0, 0);
   await expect(page.getByTestId('board-hud-friendly')).toHaveText(
@@ -73,6 +94,16 @@ async function startBattle(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Begin battle' }).click();
 
   await expect(page.getByRole('region', { name: 'Enemy waters' })).toBeVisible();
+
+  // And the battle opens on its own, over the water the player is about to fire at.
+  const battleIntro = page.getByRole('dialog', { name: 'Choose your target' });
+  await expect(battleIntro).toBeVisible();
+  await expectInsideBoard(page, 'Enemy waters', battleIntro);
+  await expect(battleIntro.getByRole('button', { name: 'Start attack' })).toBeFocused();
+  // Enter activates it, as any button would.
+  await page.keyboard.press('Enter');
+  await expect(battleIntro).toBeHidden();
+
   await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
   await expect(page.getByTestId('board-hud-enemy')).toHaveText('Select where to attack.');
   await expectHudInsideBoard(page, 'Enemy waters', 'enemy');
@@ -264,10 +295,15 @@ test('every visible text meets WCAG AA contrast', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Start game' }).click();
   await expect(page.getByRole('heading', { name: 'Deploy your fleet' })).toBeVisible();
+  // The stage introductions are measured too, then dismissed.
+  expect(await measure(), 'placement intro').toEqual([]);
+  await page.getByRole('button', { name: 'Begin placing' }).click();
   expect(await measure(), 'placement').toEqual([]);
 
   await page.getByRole('button', { name: 'Randomize fleet' }).click();
   await page.getByRole('button', { name: 'Begin battle' }).click();
+  expect(await measure(), 'battle intro').toEqual([]);
+  await page.getByRole('button', { name: 'Start attack' }).click();
   await expect(page.getByTestId('turn-banner')).toHaveText(YOUR_TURN);
   expect(await measure(), 'battle').toEqual([]);
 

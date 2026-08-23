@@ -67,6 +67,19 @@
 }
 
 @layer components {
+  /*
+   * The stage introduction: a thicker sheet of the same glass, so the water and its grid stay
+   * readable underneath while the invitation is the only thing in focus.
+   */
+  .board-intro {
+    background-color: color-mix(in oklab, white 74%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4);
+    border: 1px solid color-mix(in oklab, white 85%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, white 92%, transparent),
+      0 20px 50px -24px color-mix(in oklab, var(--color-ink) 30%, transparent);
+  }
+
   .glass-button {
     @apply glass text-ink;
     transition:
