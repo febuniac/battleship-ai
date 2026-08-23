@@ -55,7 +55,7 @@ export function WelcomeScreen({ onStart }: { readonly onStart: () => void }) {
        * The three questions a first-time player has — what do I do, how do I win, how do turns
        * work — answered in three lines. The complete rules stay behind THE RULES.
        */}
-      <div className="flex max-w-[24rem] flex-col items-center gap-2">
+      <div className="glass flex w-full max-w-[24rem] flex-col items-center gap-2 rounded-2xl px-6 py-5 sm:px-8 sm:py-6">
         <h2 className="text-[0.6rem] font-medium tracking-[0.22em] text-ink-faint uppercase">
           How to play
         </h2>
