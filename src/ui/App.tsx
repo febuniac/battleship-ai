@@ -6,9 +6,9 @@ export function App(options: UseGameOptions = {}) {
   const game = useGame(options);
 
   return (
-    <main className="min-h-dvh bg-slate-900 px-4 py-6 text-slate-100 sm:px-6 sm:py-10">
+    <main className="min-h-dvh px-3 py-5 sm:px-6 sm:py-8 lg:py-10">
       {game.state.phase === 'placement' ? (
-        <PlacementScreen game={game} />
+        <PlacementScreen game={game} autoFocusBoard={game.generation > 0} />
       ) : (
         <GameScreen game={game} />
       )}

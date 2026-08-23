@@ -11,23 +11,41 @@ const SEED = 20240617;
 // tests is stepped explicitly by `aiTick`.
 const AI_DELAY = 50_000;
 
+const YOUR_TURN = 'Your turn — fire at the enemy waters';
+const AI_TURN = 'AI is thinking';
+
 /** The AI fleet for `SEED` is known up front, so hits and misses can be chosen deliberately. */
 const aiBoard = createInitialState(SEED).boards.ai;
 const aiShipCells = allCoords().filter((at) => shipAt(aiBoard, at) !== undefined);
 const aiWaterCells = allCoords().filter((at) => shipAt(aiBoard, at) === undefined);
 
+function cellIn(boardLabel: string, at: Coord): HTMLElement {
+  const board = screen.getByRole('region', { name: boardLabel });
+  return within(board).getByRole('button', { name: new RegExp(`^${coordLabel(at)}, `) });
+}
+
 function enemyCell(at: Coord): HTMLElement {
-  const board = screen.getByRole('region', { name: 'Enemy waters' });
-  return within(board).getByRole('button', { name: new RegExp(`^${coordLabel(at)} `) });
+  return cellIn('Enemy waters', at);
 }
 
 function ownCell(at: Coord): HTMLElement {
-  const board = screen.getByRole('region', { name: 'Your waters' });
-  return within(board).getByRole('button', { name: new RegExp(`^${coordLabel(at)} `) });
+  return cellIn('Your waters', at);
 }
 
 function banner(): string {
-  return screen.getAllByRole('status')[0]?.textContent ?? '';
+  return screen.getByTestId('turn-banner').textContent ?? '';
+}
+
+function hint(): string {
+  return screen.getByTestId('validation-hint').textContent ?? '';
+}
+
+function announcement(): string {
+  return screen.getByRole('status').textContent ?? '';
+}
+
+function isLocked(cell: HTMLElement): boolean {
+  return cell.getAttribute('aria-disabled') === 'true';
 }
 
 function aiLogEntries(): string[] {
@@ -74,13 +92,14 @@ describe('Battleship app', () => {
 
     it('reports the engine reason when a placement would leave the board', async () => {
       await user.hover(ownCell({ r: 0, c: 7 }));
-      expect(screen.getByRole('status').textContent).toBe('Ship would extend off the board');
+      expect(hint()).toContain('Ship would extend off the board');
+      expect(screen.getByTestId('validation-hint').dataset.tone).toBe('invalid');
     });
 
     it('names the blocking ship when a placement would overlap', async () => {
       await user.click(ownCell({ r: 0, c: 0 }));
       await user.hover(ownCell({ r: 0, c: 2 }));
-      expect(screen.getByRole('status').textContent).toBe('Overlaps Carrier');
+      expect(hint()).toContain('Overlaps Carrier');
     });
 
     it('keeps Start game disabled until all five ships are placed', async () => {
@@ -112,10 +131,33 @@ describe('Battleship app', () => {
       expect(screen.getByRole('button', { name: /^Rotate/ }).textContent).toBe('Rotate (V)');
     });
 
+    it('places a ship with the keyboard and announces it', async () => {
+      // Tab into the grid (one stop for the whole board), walk two cells right, place there.
+      await user.tab();
+      expect(document.activeElement).toBe(ownCell({ r: 0, c: 0 }));
+      await user.keyboard('{ArrowRight}{ArrowRight}');
+      expect(document.activeElement).toBe(ownCell({ r: 0, c: 2 }));
+      await user.keyboard('{Enter}');
+
+      expect(announcement()).toBe('Carrier placed at C1, horizontal');
+      // C1..G1 now holds the Carrier; G1 is outside the preview that follows focus.
+      expect(ownCell({ r: 0, c: 6 }).getAttribute('aria-label')).toBe('G1, your ship');
+    });
+
+    it('announces the reason when a click is rejected', async () => {
+      await user.click(ownCell({ r: 0, c: 8 }));
+      expect(announcement()).toBe('Ship would extend off the board');
+      // Nothing was placed, and the cell still shows the rejected footprint under the cursor.
+      expect(ownCell({ r: 0, c: 8 }).getAttribute('aria-label')).toBe('I1, invalid placement');
+      expect(
+        within(screen.getByRole('list', { name: 'Fleet' })).queryAllByText('Placed'),
+      ).toHaveLength(0);
+    });
+
     it('starts the game once the fleet is valid', async () => {
       await startGame(user);
       expect(screen.getByRole('region', { name: 'Enemy waters' })).toBeDefined();
-      expect(banner()).toBe('Your turn - fire at the enemy waters');
+      expect(banner()).toBe(YOUR_TURN);
     });
   });
 
@@ -126,21 +168,34 @@ describe('Battleship app', () => {
 
     it('hides unhit enemy ships and only reveals what has been shot', () => {
       const board = screen.getByRole('region', { name: 'Enemy waters' });
-      expect(within(board).getAllByRole('button', { name: /water$/ })).toHaveLength(100);
+      expect(within(board).getAllByRole('button', { name: /, unknown$/ })).toHaveLength(100);
+    });
+
+    it('moves focus into the enemy grid when the battle starts', () => {
+      expect(document.activeElement).toBe(enemyCell({ r: 0, c: 0 }));
     });
 
     it('keeps the turn after a hit and locks the fired cell', async () => {
       const target = aiShipCells[0] as Coord;
       await user.click(enemyCell(target));
 
-      expect(enemyCell(target).getAttribute('aria-label')).toMatch(/(hit|sunk)$/);
-      expect(enemyCell(target)).toHaveProperty('disabled', true);
-      expect(banner()).toBe('Your turn - fire at the enemy waters');
+      expect(enemyCell(target).getAttribute('aria-label')).toMatch(/, (hit|sunk)$/);
+      expect(isLocked(enemyCell(target))).toBe(true);
+      expect(banner()).toBe(YOUR_TURN);
+      expect(announcement()).toMatch(/^You (hit|sank)/);
+    });
+
+    it('fires with the keyboard on the focused cell', async () => {
+      const target = aiShipCells[0] as Coord;
+      enemyCell(target).focus();
+      await user.keyboard('{Enter}');
+
+      expect(enemyCell(target).getAttribute('aria-label')).toMatch(/, (hit|sunk)$/);
     });
 
     it('hands the turn to the AI after a miss and returns it after an AI miss', async () => {
       await user.click(enemyCell(aiWaterCells[0] as Coord));
-      expect(banner()).toBe('AI is thinking...');
+      expect(banner()).toContain(AI_TURN);
       expect(aiLogEntries()).toHaveLength(0);
 
       let aiShots = 0;
@@ -149,7 +204,7 @@ describe('Battleship app', () => {
       let previousWasHit = false;
 
       for (let step = 0; step < 40 && !(sawStreakAfterHit && sawHandoffAfterMiss); step += 1) {
-        if (banner() === 'Your turn - fire at the enemy waters') {
+        if (banner() === YOUR_TURN) {
           await user.click(enemyCell(aiWaterCells[step + 1] as Coord));
           previousWasHit = false;
           continue;
@@ -165,9 +220,9 @@ describe('Battleship app', () => {
         const hit = /hit|sank/.test(latest);
         if (previousWasHit) sawStreakAfterHit = true;
         if (hit) {
-          expect(banner()).toBe('AI is thinking...');
+          expect(banner()).toContain(AI_TURN);
         } else {
-          expect(banner()).toBe('Your turn - fire at the enemy waters');
+          expect(banner()).toBe(YOUR_TURN);
           sawHandoffAfterMiss = true;
         }
         previousWasHit = hit;
@@ -179,8 +234,9 @@ describe('Battleship app', () => {
 
     it('blocks the player while the AI holds the turn', async () => {
       await user.click(enemyCell(aiWaterCells[0] as Coord));
-      expect(banner()).toBe('AI is thinking...');
-      expect(enemyCell(aiWaterCells[1] as Coord)).toHaveProperty('disabled', true);
+      expect(banner()).toContain(AI_TURN);
+      expect(announcement()).toContain('AI is thinking.');
+      expect(isLocked(enemyCell(aiWaterCells[1] as Coord))).toBe(true);
     });
 
     it('ends the game, blocks further fire and resets cleanly on Play again', async () => {
@@ -190,8 +246,13 @@ describe('Battleship app', () => {
 
       const dialog = screen.getByRole('dialog', { name: 'Game over' });
       expect(within(dialog).getByRole('heading', { name: 'You win' })).toBeDefined();
-      expect(within(dialog).getByText('You 5/5')).toBeDefined();
-      expect(enemyCell(aiWaterCells[0] as Coord)).toHaveProperty('disabled', true);
+      expect(within(dialog).getByRole('row', { name: 'Ships sunk 5/5 0/5' })).toBeDefined();
+      expect(announcement()).toContain('Game over. You win');
+      // Focus is moved to the only remaining action.
+      expect(document.activeElement).toBe(
+        within(dialog).getByRole('button', { name: 'Play again' }),
+      );
+      expect(isLocked(enemyCell(aiWaterCells[0] as Coord))).toBe(true);
 
       await user.click(within(dialog).getByRole('button', { name: 'Play again' }));
 
