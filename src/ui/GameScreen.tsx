@@ -12,6 +12,7 @@ import { battleAnnouncement, shotHeadline } from './announcements.ts';
 import { AppHeader } from './components/AppHeader.tsx';
 import { Board, type BoardHud } from './components/Board.tsx';
 import { BoardIntro } from './components/BoardIntro.tsx';
+import { BoardNotice } from './components/BoardNotice.tsx';
 import { ConfirmNewGame } from './components/ConfirmNewGame.tsx';
 import type { CellAnimation, CellVariant } from './components/Cell.tsx';
 import { GameOverOverlay } from './components/GameOverOverlay.tsx';
@@ -21,6 +22,7 @@ import { StatusLine } from './components/StatusLine.tsx';
 import { TurnBanner } from './components/TurnBanner.tsx';
 import { reasonText } from './messages.ts';
 import type { Game } from './useGame.ts';
+import { IDLE_PROMPT_MS, useIdlePrompt } from './useIdlePrompt.ts';
 
 /**
  * How long a landed shot keeps the board's status bar to itself before the boards go back to
@@ -53,11 +55,28 @@ function outcomeHud(entry: LogEntry, prefix: string): BoardHud {
     : { tone: 'impact', text: `${prefix}HIT` };
 }
 
-/** The most recent shot animates once, on whichever board received it. */
-function animationFor(last: LogEntry | undefined, attacker: Player, at: Coord): CellAnimation {
-  if (!last || last.player !== attacker || !sameCoord(last.at, at)) return null;
-  if (last.sunkShipId) return 'sunk';
+/**
+ * The most recent shot animates once, on whichever board received it. A shot that sinks a hull
+ * animates the whole vessel rather than the single square it landed on: what changed is the ship,
+ * and its cells are how the player sees which one went down.
+ */
+function animationFor(
+  last: LogEntry | undefined,
+  attacker: Player,
+  at: Coord,
+  sunkCells: ReadonlySet<string>,
+): CellAnimation {
+  if (!last || last.player !== attacker) return null;
+  if (last.sunkShipId !== undefined) return sunkCells.has(coordKey(at)) ? 'sunk' : null;
+  if (!sameCoord(last.at, at)) return null;
   return last.outcome === 'hit' ? 'hit' : 'miss';
+}
+
+/** The footprint of the hull the newest shot sank; empty when nothing went down. */
+function sunkFootprint(last: LogEntry | undefined, board: BoardModel): ReadonlySet<string> {
+  if (last?.sunkShipId === undefined) return new Set();
+  const ship = board.ships.find((candidate) => candidate.id === last.sunkShipId);
+  return new Set((ship?.cells ?? []).map((cell) => coordKey(cell)));
 }
 
 /** Shown beside a board only once it means something: no zeroes on an untouched fleet. */
@@ -71,9 +90,16 @@ export interface GameScreenProps {
   /** Whether the battle's one-time introduction is still owed to the player. */
   readonly intro?: boolean;
   readonly onIntroDismiss?: () => void;
+  /** Idle wait before the player's own turn is pointed out. Overridable so tests need no real clock. */
+  readonly idlePromptMs?: number;
 }
 
-export function GameScreen({ game, intro = false, onIntroDismiss }: GameScreenProps) {
+export function GameScreen({
+  game,
+  intro = false,
+  onIntroDismiss,
+  idlePromptMs = IDLE_PROMPT_MS,
+}: GameScreenProps) {
   const { state, aiThinking } = game;
   // Tagged with the log length it happened at, so the notice disappears once a shot lands.
   const [rejected, setRejected] = useState<{
@@ -107,6 +133,21 @@ export function GameScreen({ game, intro = false, onIntroDismiss }: GameScreenPr
     };
   }, [last]);
 
+  /*
+   * The turn nudge exists for the streak: a hit keeps the turn, which is easy to miss. It runs only
+   * while the player really can act — never during the AI's turn, the introduction, or once the
+   * game is over — and its key restarts the wait on every shot and every turn change.
+   */
+  const { prompt: idle, noteActivity } = useIdlePrompt(
+    playable && state.turn === 'human' && !intro,
+    `${state.phase}:${state.turn}:${state.log.length}`,
+    idlePromptMs,
+  );
+  // Touching the board is proof the prompt has been read; nothing else cuts the wait short.
+  const onBoardActivity = () => {
+    if (idle) noteActivity();
+  };
+
   const rejection = rejected?.afterShots === state.log.length ? rejected.reason : null;
 
   // Only cells of ships the engine reports as sunk may be revealed on the enemy board.
@@ -128,6 +169,9 @@ export function GameScreen({ game, intro = false, onIntroDismiss }: GameScreenPr
     if (shot === 'hit') return ship !== undefined && isSunk(ship) ? 'sunk' : 'hit';
     return ship ? 'ship' : 'water';
   };
+
+  const enemySunkCells = sunkFootprint(last?.player === 'human' ? last : undefined, enemyBoard);
+  const ownSunkCells = sunkFootprint(last?.player === 'ai' ? last : undefined, ownBoard);
 
   const enemyCaption = sunkCaption(enemyBoard);
   const ownCaption = sunkCaption(ownBoard);
@@ -163,11 +207,19 @@ export function GameScreen({ game, intro = false, onIntroDismiss }: GameScreenPr
       ? outcomeHud(last, prefix)
       : { tone: 'neutral', text: 'Game over.' };
 
+  /*
+   * A hit hands the turn straight back, so the invitation to fire says as much: with no square
+   * under the cursor, the board states that the player is still up instead of repeating itself.
+   */
+  const streak = last?.player === 'human' && last.outcome !== 'miss';
+
   /** The invitation to fire, naming the square under the cursor when there is one. */
   const targetHud = (at: Coord | null): BoardHud =>
     at !== null && shotAt(enemyBoard, at) === 'unknown'
       ? { tone: 'valid', text: `Fire at ${coordLabel(at)}` }
-      : { tone: 'neutral', text: 'Select where to attack.' };
+      : streak
+        ? { tone: 'valid', text: 'Your turn • Keep firing!' }
+        : { tone: 'neutral', text: 'Select where to attack.' };
 
   const enemyHud: BoardHud = over
     ? finalHud('human', '')
@@ -186,6 +238,36 @@ export function GameScreen({ game, intro = false, onIntroDismiss }: GameScreenPr
       : aiThinking
         ? { tone: 'neutral', text: 'AI is thinking…' }
         : { tone: 'neutral', text: 'The AI fires here.' };
+
+  /*
+   * What the water itself reports while the news is fresh: the hull that just went down, by name.
+   * Decorative and non-blocking — it fades out on its own beat and the cells stay playable under it.
+   */
+  const sunkNotice = (attacker: Player) =>
+    freshResult && last?.player === attacker && last.sunkShipId !== undefined ? (
+      <BoardNotice tone="impact" transient testId={`sunk-notice-${attacker}`}>
+        {`${shipSpec(last.sunkShipId).name.toUpperCase()} SUNK`}
+      </BoardNotice>
+    ) : null;
+
+  const ownNotice = sunkNotice('ai');
+
+  // The introduction outranks both notices; a long silence on the player's turn is the fallback.
+  const enemyOverlay = intro ? (
+    <BoardIntro
+      title="Choose your target"
+      detail="Select a position to attack"
+      action="Start attack"
+      onDismiss={() => onIntroDismiss?.()}
+    />
+  ) : (
+    (sunkNotice('human') ??
+    (idle ? (
+      <BoardNotice tone="neutral" testId="idle-prompt">
+        {"You're up! Make your next move."}
+      </BoardNotice>
+    ) : null))
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-[74rem] flex-col gap-8 sm:gap-10">
@@ -208,41 +290,40 @@ export function GameScreen({ game, intro = false, onIntroDismiss }: GameScreenPr
       </AppHeader>
 
       <div className="grid gap-10 lg:grid-cols-2 lg:gap-14">
-        {/* Attack board first: it is where the player acts. */}
-        <Board
-          label="Enemy waters"
-          {...(enemyCaption === undefined ? {} : { caption: enemyCaption })}
-          hud={enemyHud}
-          side="enemy"
-          // Emphasis follows the turn: the water that can be fired at is the one that stands out.
-          {...(state.phase === 'playing' ? { emphasis: playable ? 'active' : 'idle' } : {})}
-          variantAt={enemyVariant}
-          // Only sunk enemy hulls are drawn; an unhit ship is indistinguishable from open water.
-          ships={visibleShips(enemyBoard, 'sunkOnly')}
-          animationAt={(at) => animationFor(last, 'human', at)}
-          onSelect={(at) => {
-            const reason = game.fire(at);
-            setRejected(reason === null ? null : { reason, afterShots: state.log.length });
-          }}
-          onHover={setTarget}
-          // Keyboard focus should not read as aiming: the cell's own label already says where it is.
-          hoverOnFocus={false}
-          cellDisabled={(at) => shotAt(enemyBoard, at) !== 'unknown'}
-          disabled={!playable || intro}
-          {...(intro
-            ? {
-                overlay: (
-                  <BoardIntro
-                    title="Choose your target"
-                    detail="Select a position to attack"
-                    action="Start attack"
-                    onDismiss={() => onIntroDismiss?.()}
-                  />
-                ),
-              }
-            : // Dismissing the introduction hands the grid the focus the overlay held.
-              { focusKey: game.generation })}
-        />
+        {/*
+         * Attack board first: it is where the player acts. Any interaction with it — pointer,
+         * touch or keyboard — counts as the player having noticed their turn.
+         */}
+        <div
+          onPointerDown={onBoardActivity}
+          onPointerMove={onBoardActivity}
+          onKeyDown={onBoardActivity}
+        >
+          <Board
+            label="Enemy waters"
+            {...(enemyCaption === undefined ? {} : { caption: enemyCaption })}
+            hud={enemyHud}
+            side="enemy"
+            // Emphasis follows the turn: the water that can be fired at is the one that stands out.
+            {...(state.phase === 'playing' ? { emphasis: playable ? 'active' : 'idle' } : {})}
+            variantAt={enemyVariant}
+            // Only sunk enemy hulls are drawn; an unhit ship is indistinguishable from open water.
+            ships={visibleShips(enemyBoard, 'sunkOnly')}
+            animationAt={(at) => animationFor(last, 'human', at, enemySunkCells)}
+            onSelect={(at) => {
+              const reason = game.fire(at);
+              setRejected(reason === null ? null : { reason, afterShots: state.log.length });
+            }}
+            onHover={setTarget}
+            // Keyboard focus should not read as aiming: the cell's own label already says where it is.
+            hoverOnFocus={false}
+            cellDisabled={(at) => shotAt(enemyBoard, at) !== 'unknown'}
+            disabled={!playable || intro}
+            {...(enemyOverlay === null ? {} : { overlay: enemyOverlay })}
+            // Dismissing the introduction hands the grid the focus the overlay held.
+            {...(intro ? {} : { focusKey: game.generation })}
+          />
+        </div>
 
         <Board
           label="Your waters"
@@ -252,7 +333,8 @@ export function GameScreen({ game, intro = false, onIntroDismiss }: GameScreenPr
           {...(state.phase === 'playing' ? { emphasis: aiThinking ? 'active' : 'idle' } : {})}
           variantAt={ownVariant}
           ships={visibleShips(ownBoard, 'all')}
-          animationAt={(at) => animationFor(last, 'ai', at)}
+          animationAt={(at) => animationFor(last, 'ai', at, ownSunkCells)}
+          {...(ownNotice === null ? {} : { overlay: ownNotice })}
         />
       </div>
 

@@ -378,20 +378,28 @@
   }
 }
 
-/* Going down: takes on a list and darkens as the water closes over it. */
+/*
+ * Going down: struck bright and riding high, it takes on a list, slides under and dims as the
+ * water closes over it, then settles as the wreck it now is.
+ */
 @keyframes ship-sink {
   0% {
-    opacity: 0;
-    transform: rotate(0deg) scale(1.04);
-    filter: brightness(1.2);
+    opacity: 0.55;
+    transform: translateY(-0.22rem) rotate(0deg) scale(1.04);
+    filter: brightness(1.25);
   }
-  45% {
-    transform: rotate(-2.5deg) scale(1);
+  35% {
     opacity: 1;
+    transform: translateY(-0.06rem) rotate(-2.5deg) scale(1);
+  }
+  72% {
+    opacity: 0.62;
+    transform: translateY(0.16rem) rotate(-1.2deg) scale(0.99);
+    filter: brightness(0.92);
   }
   100% {
-    transform: rotate(0deg) scale(1);
     opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
     filter: brightness(1);
   }
 }
@@ -431,6 +439,25 @@
   }
 }
 
+/* A line of news that shows itself, is read, and leaves — all without being dismissed. */
+@keyframes notice {
+  0% {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+  16% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-0.15rem);
+  }
+}
+
 @keyframes thinking-pulse {
   0%,
   100% {
@@ -465,8 +492,22 @@
 @utility animate-ship-sink {
   animation: ship-sink 720ms ease-out;
 }
+@utility animate-notice {
+  animation: notice 700ms ease-out forwards;
+}
 
 @layer components {
+  /*
+   * A notice on the water: the same glass as the board's own status bar, so news about a hull or a
+   * waiting turn reads as part of the board rather than as a dialog over it.
+   */
+  .board-notice {
+    background-color: color-mix(in oklab, white 76%, transparent);
+    backdrop-filter: blur(10px) saturate(1.3);
+    border: 1px solid color-mix(in oklab, white 80%, transparent);
+    box-shadow: 0 6px 18px -10px color-mix(in oklab, var(--color-ink) 40%, transparent);
+  }
+
   /* Spray and ripple are drawn by the cell's own pseudo-elements, so a miss needs no extra DOM. */
   .animate-shot-miss::before,
   .animate-shot-miss::after,
@@ -562,6 +603,7 @@
   }
 
   .animate-shot-sunk,
+  .animate-notice,
   .animate-reveal,
   .animate-turn-change,
   .animate-ship-place,
