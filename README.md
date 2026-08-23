@@ -3,8 +3,7 @@
 Battleship played in the browser against an AI opponent. Fully client-side: no backend, no
 network calls, no persistence.
 
-**Status:** engine + AI + tests (PR 1). The UI is a placeholder shell; the playable interface
-and the public deployment land in the following PRs.
+**Status:** playable end to end locally (`npm run dev`); the public deployment lands in the next PR.
 
 ## Rules
 
@@ -28,13 +27,22 @@ src/ai/       AIPlayer implementations
   huntTarget.ts  hunt on a parity lattice, target around unresolved hits, extend along the axis
   index.ts       strategy registry (add a strategy = one file + one entry)
   driver.ts      drives an AI turn through the real reducer, including hit streaks
-src/ui/       placeholder shell (PR 2)
+src/ui/       React projection of the engine
+  useGame.ts        the only React-side owner of game state: dispatches actions through
+                    applyAction and paces the AI turn (one shot per timer tick)
+  PlacementScreen   ship tray, rotation (button + R), click placement, engine-backed preview
+  GameScreen        both boards, turn banner, fleet status, shot log, game-over overlay
+  components/       Board, Cell, ShipTray, StatusLog, TurnBanner, ValidationHint, GameOverOverlay
+  messages.ts       IllegalReason -> player-facing wording
 src/testing/  fixtures + headless self-play harness
 ```
 
 Design constraints enforced by the code, not by convention:
 
-- The engine is framework-agnostic and immutable; the UI will be a projection of `GameState`.
+- The engine is framework-agnostic and immutable; the UI is a projection of `GameState` and holds
+  no rules of its own — even the placement preview asks the engine for its verdict.
+- The AI turn is a loop by construction: `useGame` schedules one shot, and because a hit leaves the
+  turn with the AI the effect re-runs, so a streak is visible shot by shot instead of instantly.
 - All randomness is an injected seeded RNG, so every game is reproducible from a seed.
 - The AI only ever receives a `PlayerView`, which structurally cannot contain the opponent's
   ship layout — it can't cheat even by accident.
@@ -50,7 +58,7 @@ npm run build          # typecheck + production build
 npm run typecheck
 npm run lint
 npm run format
-npm test               # Vitest
+npm test               # Vitest: `engine` (node) + `ui` (jsdom) projects
 npm run test:coverage  # engine + AI, 90% thresholds
 npm run simulate       # 500 headless AI-vs-AI games: winners, shot distribution, illegal moves
 ```
@@ -65,6 +73,11 @@ duplicate shots, the extra-turn streak rule, sink/win transitions, state immutab
 targeting behaviour, an information-leak test on `PlayerView`, and seeded self-play invariants
 (every game terminates with exactly one winner and no illegal move) plus a statistical check
 that the AI stays materially better than random guessing.
+
+The `ui` project adds behaviour tests (not snapshots) for the rules as the player experiences them:
+invalid-placement feedback, Start game gating, firing, cell lockout, the extra-turn streak, the
+handoff back to the player, game-over lockout, and a clean reset on Play again. They run against a
+fixed seed, so the AI fleet is known and hits/misses can be chosen deliberately.
 
 ## License
 
