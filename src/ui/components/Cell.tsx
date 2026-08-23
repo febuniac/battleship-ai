@@ -152,7 +152,7 @@ export function Cell({
         if (hoverOnFocus) onHover?.(at);
       }}
       /* `relative` gives the miss and hit animations their spray and ripple pseudo-elements. */
-      className={`relative flex aspect-square items-center justify-center transition-colors duration-150 ${
+      className={`relative flex aspect-square touch-manipulation items-center justify-center transition-colors duration-150 ${
         VARIANT_CLASS[variant]
       } ${animation ? ANIMATION_CLASS[animation] : ''} ${
         interactive ? 'cursor-pointer hover:bg-white/40' : 'cursor-default'
