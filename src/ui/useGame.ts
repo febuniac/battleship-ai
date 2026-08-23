@@ -17,13 +17,18 @@ import type {
 export interface UseGameOptions {
   /** Fixed seed for reproducible games; defaults to a fresh random one per mount. */
   readonly seed?: number;
-  /** Delay before each AI shot, so a streak reads as a sequence rather than a jump. */
+  /**
+   * Delay before each AI shot, so the player can read their own result, see the turn change and
+   * follow a streak as a sequence rather than a jump. Purely cosmetic: the engine never sees it.
+   */
   readonly aiDelayMs?: number;
   readonly strategy?: AIStrategyId;
 }
 
 export interface Game {
   readonly state: GameState;
+  /** Bumped by `reset`: lets the UI tell a fresh game apart from the very first one. */
+  readonly generation: number;
   /** True while the AI holds the turn: the player's input must be locked out. */
   readonly aiThinking: boolean;
   /** Engine verdict for a hypothetical placement, used for the hover preview. */
@@ -37,6 +42,12 @@ export interface Game {
   reset(): IllegalReason | null;
 }
 
+/**
+ * How long the AI appears to think before each of its shots. Long enough that the result of the
+ * player's own shot registers and the turn change is noticed, short enough not to feel sluggish.
+ */
+const AI_THINKING_MS = 1500;
+
 /** New games get a random seed; the engine itself never touches `Math.random`. */
 function freshSeed(): number {
   return Math.floor(Math.random() * 2 ** 31);
@@ -49,10 +60,11 @@ function freshSeed(): number {
  * `IllegalReason` to the caller for display.
  */
 export function useGame(options: UseGameOptions = {}): Game {
-  const { seed, aiDelayMs = 550, strategy } = options;
+  const { seed, aiDelayMs = AI_THINKING_MS, strategy } = options;
 
   const [initialSeed] = useState(() => seed ?? freshSeed());
   const [state, setState] = useState<GameState>(() => createInitialState(initialSeed));
+  const [generation, setGeneration] = useState(0);
   // The ref mirrors `state` so dispatch always validates against the newest state and can
   // report the rejection reason synchronously, without a stale render closure.
   const stateRef = useRef(state);
@@ -87,15 +99,20 @@ export function useGame(options: UseGameOptions = {}): Game {
     };
   }, [state, aiDelayMs, commit]);
 
+  // The engine derives the next game's seed from the current generator state, so a seeded
+  // session stays reproducible across restarts; React only re-seeds the AI's own generator.
   const reset = useCallback((): IllegalReason | null => {
-    const nextSeed = freshSeed();
-    rngRef.current = createRng(nextSeed);
-    commit(createInitialState(nextSeed));
+    const result = applyAction(stateRef.current, { type: 'RESET' });
+    if (!result.ok) return result.reason;
+    rngRef.current = createRng(result.state.rng);
+    commit(result.state);
+    setGeneration((current) => current + 1);
     return null;
   }, [commit]);
 
   return {
     state,
+    generation,
     aiThinking: state.phase === 'playing' && state.turn === 'ai',
     checkPlacement: (shipId, origin, orientation) =>
       validatePlacement(stateRef.current.boards.human, shipId, origin, orientation),
